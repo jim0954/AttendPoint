@@ -172,7 +172,7 @@
       App.ensureSession().then(function (sessionId) {
         const p = App.run({ type: 'points.checkin', studentId: s.id, sessionId: sessionId });
         afterAccepted(p, `🎉 ${s.name} 報到成功！`, 'ok');
-      }, function () { el.disabled = false; });
+      });
     },
     'award-rule': function (el) {
       const s = App.studentById(el.dataset.id);

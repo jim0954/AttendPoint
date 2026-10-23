@@ -113,9 +113,12 @@
   }
 
   /**
-   * 執行資料操作。回傳 Promise<{ result, state }>（後端的結果）。
-   * 失敗時已經顯示提示，呼叫端可以不處理 reject。
+   * 執行資料操作。成功時 Promise 帶著後端結果 { result, state } 完成。
+   * 失敗時已經顯示提示，Promise 不會完成也不會 reject，呼叫端只要寫成功後要做的事。
+   * 回傳的 Promise 有 accepted 屬性：true 表示已通過本機檢查（加減分類操作已經顯示在畫面上）。
    */
+  function never() { return new Promise(function () {}); }
+
   App.run = function (op) {
     const optimistic = OPTIMISTIC.indexOf(op.type) !== -1;
     if (optimistic) {
@@ -123,17 +126,15 @@
         App.s.data = localApply(App.s.data, op).state;
       } catch (e) {
         App.handleError(e);
-        const rejected = Promise.reject(e);
-        rejected.catch(function () {});
-        rejected.accepted = false;
-        return rejected;
+        const stalled = never();
+        stalled.accepted = false;
+        return stalled;
       }
     }
     const p = new Promise(function (resolve, reject) {
       queue.push({ op: op, optimistic: optimistic, resolve: resolve, reject: reject });
-    });
-    p.catch(function () {});
-    p.accepted = true; // 已通過本機檢查（樂觀更新已生效）
+    }).then(null, never);
+    p.accepted = true;
     App.s.pending = queue.length;
     App.render();
     pump();
