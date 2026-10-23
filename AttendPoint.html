@@ -1,0 +1,2268 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>佛堂兒童讀經班・青少年班 年度報到與加分系統</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      background-color: #faf7f2;
+      color: #2d241e;
+    }
+    .warm-card {
+      background: #ffffff;
+      border: 1px solid #ede5d8;
+      box-shadow: 0 2px 10px rgba(120, 90, 60, 0.05);
+    }
+    .tab-active {
+      background-color: #b45309;
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .class-active-kids {
+      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(180, 83, 9, 0.25);
+    }
+    .class-active-youth {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(4, 120, 87, 0.25);
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.92); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.18s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-16">
+  <!-- Top Header -->
+  <header class="bg-gradient-to-r from-amber-800 via-amber-700 to-yellow-700 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-100/20 flex items-center justify-center text-2xl shadow-inner" aria-hidden="true">
+          🪷
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 id="templeNameDisplay" class="text-lg sm:text-xl font-bold tracking-wide">慈光佛堂｜年度班程報到加分系統</h1>
+            <span id="currentYearBadge" class="text-xs bg-amber-200 text-amber-950 font-bold px-2.5 py-0.5 rounded-full">2026 年度</span>
+          </div>
+          <p class="text-xs text-amber-100/90">雙軌積分制：榮譽總分（年度排行）・可用點數（期末換禮）｜支援家長唯讀檢視＆壇務加減分權限</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Permission / Role Switcher -->
+        <button id="roleToggleBtn" type="button" class="text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+          <span id="roleIcon">🛠️</span>
+          <span id="roleText">壇務管理模式（點擊切換）</span>
+        </button>
+
+        <div class="flex items-center bg-amber-900/40 rounded-lg px-2.5 py-1.5 border border-amber-500/30">
+          <label for="sessionDateInput" class="text-xs text-amber-100 mr-2">上課日期</label>
+          <input id="sessionDateInput" type="date" class="bg-transparent text-white text-xs sm:text-sm font-medium focus:outline-none cursor-pointer" />
+        </div>
+        <button id="soundToggleBtn" type="button" class="text-xs sm:text-sm bg-amber-900/40 hover:bg-amber-900/60 border border-amber-400/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+          <span id="soundIcon">🔊</span>
+          <span id="soundText">音效開啟</span>
+        </button>
+        <button id="quickScanBtn" type="button" class="text-xs sm:text-sm bg-yellow-400 hover:bg-yellow-300 text-amber-950 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+          <span>🔢</span>
+          <span>編號快速報到</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Role Status Banner -->
+    <div id="roleNoticeBanner" class="bg-amber-950/60 border-t border-amber-600/30 px-4 py-1.5 text-xs">
+      <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
+        <span id="roleNoticeText" class="text-amber-100">🔓 目前為【壇務管理權限】：可執行點名報到、加分、減分、好禮兌換與名冊管理。</span>
+        <span class="text-amber-200/80">預設壇務密碼：<code id="pinHintCode" class="bg-amber-900 px-1.5 py-0.5 rounded font-mono">8888</code></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto px-4 pt-4 space-y-4">
+    <!-- Class Switcher & Summary Metrics -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+      <!-- Class Switcher (Left 5 cols) -->
+      <div class="lg:col-span-5 warm-card rounded-2xl p-3 flex flex-col justify-between gap-2">
+        <div class="text-xs font-semibold text-stone-500 px-1 flex items-center justify-between">
+          <span>切換班別（點擊切換名冊與加分規則）</span>
+          <span id="activeClassCountLabel" class="text-amber-700 font-bold">共 12 位學員</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2.5">
+          <button id="switchKidsBtn" type="button" class="class-active-kids rounded-xl p-3 text-left transition flex items-center gap-3">
+            <span class="text-2xl">📖</span>
+            <div>
+              <div class="font-bold text-sm sm:text-base">兒童讀經班</div>
+              <div class="text-xs opacity-90">孝順 / 仁愛 / 智慧隊</div>
+            </div>
+          </button>
+          <button id="switchYouthBtn" type="button" class="bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl p-3 text-left transition flex items-center gap-3">
+            <span class="text-2xl">🌱</span>
+            <div>
+              <div class="font-bold text-sm sm:text-base">青少年班</div>
+              <div class="text-xs opacity-80">慈悲 / 精進 / 喜捨組</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary KPI Cards (Right 7 cols) -->
+      <div class="lg:col-span-7 grid grid-cols-3 gap-3">
+        <div class="warm-card rounded-2xl p-3.5 flex flex-col justify-between">
+          <div class="text-xs text-stone-500 font-medium">本堂課出席率</div>
+          <div class="mt-1 flex items-baseline gap-1.5">
+            <span id="statCheckedIn" class="text-2xl sm:text-3xl font-extrabold text-amber-700">0</span>
+            <span class="text-xs text-stone-500">/ <span id="statTotalStudents">0</span> 人</span>
+          </div>
+          <div class="w-full bg-stone-200 h-1.5 rounded-full mt-2 overflow-hidden">
+            <div id="statAttendanceBar" class="bg-amber-600 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="warm-card rounded-2xl p-3.5 flex flex-col justify-between">
+          <div class="text-xs text-stone-500 font-medium">今日發出點數</div>
+          <div class="mt-1 flex items-baseline gap-1">
+            <span id="statTodayPoints" class="text-2xl sm:text-3xl font-extrabold text-emerald-700">+0</span>
+            <span class="text-xs text-stone-500">分</span>
+          </div>
+          <div id="statTodayActions" class="text-xs text-stone-500 mt-2 truncate">尚無今日加分紀錄</div>
+        </div>
+
+        <div class="warm-card rounded-2xl p-3.5 flex flex-col justify-between">
+          <div class="text-xs text-stone-500 font-medium">本班年度榮譽冠軍</div>
+          <div id="statTopStudent" class="mt-1 text-base sm:text-lg font-bold text-stone-800 truncate">-</div>
+          <div id="statTopScore" class="text-xs text-amber-700 font-semibold mt-1">年度累積 0 分</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View Navigation Tabs -->
+    <nav class="warm-card rounded-2xl p-1.5 flex flex-wrap gap-1.5 justify-between items-center">
+      <div class="flex flex-wrap gap-1.5">
+        <button id="tabBtnCheckin" type="button" class="tab-active px-4 py-2 rounded-xl text-sm transition flex items-center gap-1.5">
+          <span>✅</span><span id="tabCheckinLabel">點名與快速加分</span>
+        </button>
+        <button id="tabBtnLeaderboard" type="button" class="text-stone-600 hover:bg-stone-100 px-4 py-2 rounded-xl text-sm transition flex items-center gap-1.5">
+          <span>🏆</span><span>年度榮譽榜 & 小隊競賽</span>
+        </button>
+        <button id="tabBtnRedeem" type="button" class="text-stone-600 hover:bg-stone-100 px-4 py-2 rounded-xl text-sm transition flex items-center gap-1.5">
+          <span>🎁</span><span>好禮兌換站</span>
+        </button>
+        <button id="tabBtnManage" type="button" class="text-stone-600 hover:bg-stone-100 px-4 py-2 rounded-xl text-sm transition flex items-center gap-1.5">
+          <span>📋</span><span>紀錄明細 & 名冊匯出</span>
+        </button>
+      </div>
+
+      <div id="adminQuickToolbar" class="flex items-center gap-2 pr-1">
+        <button id="openTeamBonusBtn" type="button" class="text-xs sm:text-sm bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+          <span>⚡</span><span>小隊全體加分</span>
+        </button>
+        <button id="openAddStudentBtn" type="button" class="text-xs sm:text-sm bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+          <span>➕</span><span>新增學員</span>
+        </button>
+        <button id="openBatchImportBtn" type="button" class="text-xs sm:text-sm bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+          <span>📥</span><span>匯入名冊 / 小隊設定</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- TAB 1: CHECK-IN & QUICK POINTS -->
+    <section id="viewCheckin" class="space-y-4">
+      <!-- Filter & Search Bar -->
+      <div class="warm-card rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold text-stone-500">小隊篩選：</span>
+          <div id="teamFilterContainer" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap flex-1 sm:flex-initial justify-end">
+          <select id="statusFilterSelect" aria-label="報到狀態篩選" class="text-xs sm:text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-700 focus:outline-none focus:border-amber-600">
+            <option value="all">全部狀態</option>
+            <option value="unchecked">今日未報到</option>
+            <option value="checked">今日已報到</option>
+          </select>
+          <div class="relative flex-1 sm:w-52">
+            <input id="studentSearchInput" type="text" placeholder="搜尋姓名或學號 (如 K01)..." class="w-full text-xs sm:text-sm bg-stone-50 border border-stone-200 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:border-amber-600" />
+            <span class="absolute left-2.5 top-2 text-stone-400 text-sm">🔍</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Student Cards Grid -->
+      <div id="studentGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5"></div>
+    </section>
+
+    <!-- TAB 2: LEADERBOARD & TEAM COMPETITION -->
+    <section id="viewLeaderboard" class="hidden space-y-4">
+      <!-- Team Podium -->
+      <div class="warm-card rounded-2xl p-5">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+              <span>🚩</span><span>小隊年度總積分競賽</span>
+            </h2>
+            <p class="text-xs text-stone-500">依小隊成員的「年度榮譽總分」加總計算，激發團隊互助精神</p>
+          </div>
+        </div>
+        <div id="teamLeaderboardGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- Individual Annual Ranking -->
+      <div class="warm-card rounded-2xl p-5">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+              <span>👑</span><span>個人年度榮譽排行榜（年底頒獎依據）</span>
+            </h2>
+            <p class="text-xs text-stone-500">兌換獎品只會扣除「可用點數」，不會減少「年度榮譽總分」與稱號等級</p>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-stone-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+            <span>🌱 0-99 初學小書僮</span>
+            <span>・</span>
+            <span>📜 100-199 勤學小秀才</span>
+            <span>・</span>
+            <span>🏅 200-299 讀經小舉人</span>
+            <span>・</span>
+            <span>👑 300+ 智慧小狀元</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-stone-200 text-stone-500 text-xs">
+                <th class="py-2.5 px-3">名次</th>
+                <th class="py-2.5 px-3">學號 / 姓名</th>
+                <th class="py-2.5 px-3">小隊</th>
+                <th class="py-2.5 px-3">榮譽稱號</th>
+                <th class="py-2.5 px-3 text-center">年度出席堂數</th>
+                <th class="py-2.5 px-3 text-right">年度榮譽總分</th>
+                <th class="py-2.5 px-3 text-right">目前可用點數</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardTableBody" class="divide-y divide-stone-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: GIFT REDEMPTION STORE -->
+    <section id="viewRedeem" class="hidden space-y-4">
+      <div class="warm-card rounded-2xl p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-200">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+              <span>🎁</span><span>佛堂好禮兌換站（期中／期末結緣品兌換）</span>
+            </h2>
+            <p class="text-xs text-stone-500 mt-0.5">家長與學員可檢視各禮品所需點數；實際扣點兌換需由「壇務管理模式」操作</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <label for="redeemStudentSelect" class="text-xs font-semibold text-stone-600">選擇學員：</label>
+            <select id="redeemStudentSelect" class="text-sm bg-amber-50 border border-amber-300 font-semibold text-amber-950 rounded-xl px-3 py-2 focus:outline-none">
+            </select>
+          </div>
+        </div>
+
+        <!-- Selected Student Balance Banner -->
+        <div id="redeemStudentBanner" class="mt-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        </div>
+
+        <!-- Gift Catalog Grid -->
+        <div id="giftCatalogGrid" class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5"></div>
+      </div>
+    </section>
+
+    <!-- TAB 4: LOGS, PERMISSIONS, EXPORT & ANNUAL RESET -->
+    <section id="viewManage" class="hidden space-y-4">
+      <!-- Permission & PIN Settings Card -->
+      <div class="warm-card rounded-2xl p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+              <span>🔐</span><span>權限狀態與壇務密碼設定</span>
+            </h2>
+            <p class="text-xs text-stone-500">切換為「家長／學員檢視模式」時，所有加減分與刪除按鈕皆會自動鎖定隱藏，防止誤觸或自行加分</p>
+          </div>
+          <div id="pinSettingBox" class="flex items-center gap-2">
+            <label for="adminPinUpdateInput" class="text-xs font-semibold text-stone-600">修改壇務密碼：</label>
+            <input id="adminPinUpdateInput" type="text" maxlength="8" class="w-24 text-center font-mono font-bold text-sm bg-stone-50 border border-stone-300 rounded-xl px-2.5 py-1.5" />
+            <button id="saveAdminPinBtn" type="button" class="text-xs bg-stone-800 hover:bg-stone-900 text-white font-semibold px-3 py-2 rounded-xl transition">儲存密碼</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Batch Import & Class/Team Customization Card -->
+      <div id="batchImportManageCard" class="warm-card rounded-2xl p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+              <span>📥</span><span>名冊批次匯入（CSV 檔案 ／ Excel 複製貼上）與班別小隊設定</span>
+            </h2>
+            <p class="text-xs text-stone-500 mt-0.5">支援下載標準 CSV 範本修改後匯入，或直接從 Excel／Google 試算表複製貼上整批名單，系統會自動建立對應的小隊分類</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="downloadTemplateCsvBtn" type="button" class="text-xs sm:text-sm bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 font-semibold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5">
+              <span>📄</span><span>下載 CSV 匯入範本</span>
+            </button>
+            <button id="openBatchImportFromManageBtn" type="button" class="text-xs sm:text-sm bg-blue-700 hover:bg-blue-800 text-white font-semibold px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5">
+              <span>📥</span><span>開啟批次匯入與小隊設定視窗</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Export & Annual Management Card -->
+      <div class="warm-card rounded-2xl p-5">
+        <h2 class="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2 mb-1">
+          <span>💾</span><span>年度報表匯出與跨年度結算工具</span>
+        </h2>
+        <p class="text-xs text-stone-500 mb-4">可隨時匯出 CSV 報表備份至佛堂電腦或 Google 試算表</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button id="exportRosterCsvBtn" type="button" class="bg-amber-700 hover:bg-amber-800 text-white font-semibold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition">
+            <span>📊</span><span>匯出學員年度總分報表 (.csv)</span>
+          </button>
+          <button id="exportLogsCsvBtn" type="button" class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition">
+            <span>📑</span><span>匯出報到與加分流水帳 (.csv)</span>
+          </button>
+          <button id="openAnnualResetModalBtn" type="button" class="bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 font-semibold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition">
+            <span>🔄</span><span>跨年度結算與新年度歸零</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent Activity Log Table with Undo -->
+      <div class="warm-card rounded-2xl p-5">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+              <span>🕒</span><span>報到與加減分流水帳紀錄</span>
+            </h2>
+            <p class="text-xs text-stone-500">公開透明顯示每一筆加分、扣分與換禮紀錄；壇務模式下可點擊右側「撤銷」退回點數</p>
+          </div>
+          <span id="logCountBadge" class="text-xs bg-stone-100 text-stone-600 px-2.5 py-1 rounded-lg font-medium">共 0 筆紀錄</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-stone-200 text-stone-500 text-xs">
+                <th class="py-2.5 px-3">時間 / 上課日</th>
+                <th class="py-2.5 px-3">班別</th>
+                <th class="py-2.5 px-3">學員姓名</th>
+                <th class="py-2.5 px-3">項目說明</th>
+                <th class="py-2.5 px-3 text-right">榮譽總分變動</th>
+                <th class="py-2.5 px-3 text-right">可用點數變動</th>
+                <th class="py-2.5 px-3 text-center">壇務操作</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody" class="divide-y divide-stone-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL 1: STUDENT QUICK ADD/DEDUCT POINTS OR PARENT VIEW -->
+  <div id="studentActionModal" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-xl animate-pop max-h-[90vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-2 border-b border-stone-100 pb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="modalStudentId" class="text-xs font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md">K01</span>
+            <h3 id="modalStudentName" class="text-lg font-bold text-stone-800">王小明</h3>
+            <span id="modalStudentTeam" class="text-xs text-stone-500">孝順隊</span>
+          </div>
+          <p class="text-xs text-stone-500 mt-1">
+            年度榮譽總分：<strong id="modalStudentHonor" class="text-amber-700">0</strong> 分 ｜ 目前可用點數：<strong id="modalStudentBalance" class="text-emerald-700">0</strong> 點
+          </p>
+        </div>
+        <button id="closeStudentModalBtn" type="button" class="text-stone-400 hover:text-stone-600 text-xl leading-none px-2 py-1">✕</button>
+      </div>
+
+      <!-- Admin Controls Section (Shown only in Staff Mode) -->
+      <div id="modalAdminSection" class="mt-4 space-y-4">
+        <div>
+          <div class="text-xs font-semibold text-stone-500 mb-2">📌 常見表現一鍵加分（點擊立即入帳）</div>
+          <div id="modalPresetRulesGrid" class="grid grid-cols-2 gap-2"></div>
+        </div>
+
+        <div>
+          <div class="text-xs font-semibold text-red-700 mb-2">⚠️ 壇務秩序提醒與扣分項目（點擊立即扣分）</div>
+          <div id="modalDeductRulesGrid" class="grid grid-cols-2 gap-2"></div>
+        </div>
+
+        <div class="border-t border-stone-100 pt-3">
+          <div class="text-xs font-semibold text-stone-600 mb-2">✍️ 壇務自訂加分／減分調整</div>
+          <div class="flex flex-wrap sm:flex-nowrap gap-2">
+            <input id="customReasonInput" type="text" placeholder="輸入加減分事由..." class="flex-1 text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 focus:outline-none focus:border-amber-600" />
+            <input id="customPointsInput" type="number" value="10" min="1" max="200" class="w-20 text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-center font-bold focus:outline-none focus:border-amber-600" />
+            <button id="submitCustomPointsBtn" type="button" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl transition">
+              確認加分
+            </button>
+            <button id="submitCustomDeductBtn" type="button" class="bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl transition">
+              ➖ 扣分
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Student Personal History Section (Visible to Both Parents & Staff) -->
+      <div class="mt-4 border-t border-stone-100 pt-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-stone-600">📖 個人近期報到與加減分紀錄</span>
+          <span id="modalAttendanceCount" class="text-xs text-amber-800 font-semibold">本年度出席 0 堂</span>
+        </div>
+        <div id="modalStudentHistoryList" class="space-y-1.5 max-h-44 overflow-y-auto pr-1"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: TEAM BATCH BONUS / DEDUCT -->
+  <div id="teamBonusModal" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl animate-pop">
+      <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+        <h3 class="text-lg font-bold text-stone-800 flex items-center gap-2">
+          <span>⚡</span><span>小隊／全班集體加減分</span>
+        </h3>
+        <button id="closeTeamBonusModalBtn" type="button" class="text-stone-400 hover:text-stone-600 text-xl leading-none px-2 py-1">✕</button>
+      </div>
+
+      <div class="mt-4 space-y-3">
+        <div>
+          <label for="batchTargetSelect" class="block text-xs font-semibold text-stone-600 mb-1">選擇對象</label>
+          <select id="batchTargetSelect" class="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 font-medium"></select>
+        </div>
+        <div>
+          <label for="batchReasonInput" class="block text-xs font-semibold text-stone-600 mb-1">事由說明</label>
+          <input id="batchReasonInput" type="text" value="小隊讀經競賽表現優異" class="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2" />
+        </div>
+        <div>
+          <label for="batchPointsInput" class="block text-xs font-semibold text-stone-600 mb-1">每人變動點數</label>
+          <div class="flex gap-2">
+            <button type="button" data-batch-pts="10" class="batch-pts-preset flex-1 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 font-bold text-sm">+10 分</button>
+            <button type="button" data-batch-pts="20" class="batch-pts-preset flex-1 py-2 rounded-xl border border-stone-200 bg-stone-50 text-stone-700 font-bold text-sm">+20 分</button>
+            <button type="button" data-batch-pts="30" class="batch-pts-preset flex-1 py-2 rounded-xl border border-stone-200 bg-stone-50 text-stone-700 font-bold text-sm">+30 分</button>
+            <input id="batchPointsInput" type="number" value="10" min="1" max="100" class="w-20 text-center font-bold bg-stone-50 border border-stone-200 rounded-xl px-2 py-2 text-sm" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-2">
+          <button id="confirmTeamBonusBtn" type="button" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl shadow-sm transition text-sm">
+            立即為選取成員加分
+          </button>
+          <button id="confirmTeamDeductBtn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl shadow-sm transition text-sm">
+            ➖ 集體扣分
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: ADD NEW STUDENT -->
+  <div id="addStudentModal" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl animate-pop">
+      <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+        <h3 class="text-lg font-bold text-stone-800">➕ 新增班員名冊</h3>
+        <button id="closeAddStudentModalBtn" type="button" class="text-stone-400 hover:text-stone-600 text-xl leading-none px-2 py-1">✕</button>
+      </div>
+      <div class="mt-4 space-y-3">
+        <div>
+          <label for="newStudentClassSelect" class="block text-xs font-semibold text-stone-600 mb-1">所屬班別</label>
+          <select id="newStudentClassSelect" class="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+            <option value="kids">📖 兒童讀經班</option>
+            <option value="youth">🌱 青少年班</option>
+          </select>
+        </div>
+        <div>
+          <label for="newStudentNameInput" class="block text-xs font-semibold text-stone-600 mb-1">學員姓名</label>
+          <input id="newStudentNameInput" type="text" placeholder="請輸入姓名（如：林小華）" class="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2" />
+        </div>
+        <div>
+          <label for="newStudentTeamSelect" class="block text-xs font-semibold text-stone-600 mb-1">所屬小隊</label>
+          <select id="newStudentTeamSelect" class="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2"></select>
+        </div>
+        <button id="confirmAddStudentBtn" type="button" class="w-full mt-2 bg-amber-700 hover:bg-amber-800 text-white font-bold py-2.5 rounded-xl shadow-sm transition">
+          確認新增學員
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: QUICK ID / QR CODE SCAN SIMULATION -->
+  <div id="quickScanModal" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl animate-pop">
+      <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+        <h3 class="text-lg font-bold text-stone-800 flex items-center gap-2">
+          <span>🔢</span><span>聯絡簿編號／條碼快速報到</span>
+        </h3>
+        <button id="closeQuickScanModalBtn" type="button" class="text-stone-400 hover:text-stone-600 text-xl leading-none px-2 py-1">✕</button>
+      </div>
+      <p class="text-xs text-stone-500 mt-2">
+        若搭配外接條碼槍或鍵盤，輸入學員編號（例如兒童班 <code class="bg-stone-100 px-1 rounded">K01</code>～<code class="bg-stone-100 px-1 rounded">K06</code>、青少年班 <code class="bg-stone-100 px-1 rounded">Y01</code>～<code class="bg-stone-100 px-1 rounded">Y06</code>）或姓名即可一秒完成準時報到（+10 分）。
+      </p>
+      <div class="mt-4 flex gap-2">
+        <input id="quickScanInput" type="text" placeholder="輸入學號 (如 K01) 或姓名..." class="flex-1 text-base bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 font-bold uppercase focus:outline-none focus:border-amber-600" />
+        <button id="submitQuickScanBtn" type="button" class="bg-amber-700 hover:bg-amber-800 text-white font-bold px-5 py-2.5 rounded-xl transition">
+          報到
+        </button>
+      </div>
+      <div id="quickScanResultBox" class="mt-3 hidden rounded-xl p-3 text-sm font-medium"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: ANNUAL RESET / NEW YEAR TRANSITION -->
+  <div id="annualResetModal" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl animate-pop">
+      <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+        <h3 class="text-lg font-bold text-stone-800 flex items-center gap-2">
+          <span>🔄</span><span>跨年度結算與新年度重置</span>
+        </h3>
+        <button id="closeAnnualResetModalBtn" type="button" class="text-stone-400 hover:text-stone-600 text-xl leading-none px-2 py-1">✕</button>
+      </div>
+      <p class="text-xs text-stone-600 mt-3 leading-relaxed">
+        執行「跨年度重置」將會把目前學員名冊保留下來，但將所有人的<strong>年度榮譽總分、可用點數與出席紀錄歸零</strong>，並推進至下一個年度（建議執行前先點擊「匯出學員年度總分報表」留存備份）。
+      </p>
+      <div class="mt-4 space-y-2.5">
+        <label for="nextYearLabelInput" class="block text-xs font-semibold text-stone-600">新年度名稱</label>
+        <input id="nextYearLabelInput" type="text" value="2027 年度" class="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 font-semibold" />
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button id="cancelAnnualResetBtn" type="button" class="px-4 py-2 rounded-xl text-sm font-medium bg-stone-100 hover:bg-stone-200 text-stone-700">取消</button>
+        <button id="confirmAnnualResetBtn" type="button" class="px-4 py-2 rounded-xl text-sm font-bold bg-red-600 hover:bg-red-700 text-white">確認重置並進入新年度</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 6: ADMIN PIN LOGIN -->
+  <div id="adminPinModal" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl animate-pop">
+      <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+        <h3 class="text-lg font-bold text-stone-800 flex items-center gap-2">
+          <span>🔐</span><span>切換為壇務管理權限</span>
+        </h3>
+        <button id="closeAdminPinModalBtn" type="button" class="text-stone-400 hover:text-stone-600 text-xl leading-none px-2 py-1">✕</button>
+      </div>
+      <p class="text-xs text-stone-500 mt-2.5 leading-relaxed">
+        請輸入壇務人員通行密碼以解鎖「點名報到、加分、減分、好禮兌換與名冊管理」功能（預設密碼為 <code class="bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded">8888</code>）。
+      </p>
+      <div class="mt-4">
+        <input id="adminPinInput" type="password" placeholder="請輸入壇務密碼..." class="w-full text-center text-lg tracking-widest font-bold bg-stone-50 border border-stone-300 rounded-xl px-3 py-2.5 focus:outline-none focus:border-amber-600" />
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button id="cancelAdminPinBtn" type="button" class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-stone-100 hover:bg-stone-200 text-stone-700">取消</button>
+        <button id="confirmAdminPinBtn" type="button" class="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-700 hover:bg-amber-800 text-white">確認解鎖</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 7: BATCH IMPORT (CSV / EXCEL PASTE) & CLASS/TEAM SETTINGS -->
+  <div id="batchImportModal" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-xl animate-pop max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+        <div>
+          <h3 class="text-lg font-bold text-stone-800 flex items-center gap-2">
+            <span>📥</span><span>批次匯入學員名冊 ＆ 自訂班別小隊</span>
+          </h3>
+          <p class="text-xs text-stone-500 mt-0.5">免逐筆手打！可上傳 CSV 檔案、從 Excel 直接複製貼上，或自訂各班別與小隊名稱</p>
+        </div>
+        <button id="closeBatchImportModalBtn" type="button" class="text-stone-400 hover:text-stone-600 text-xl leading-none px-2 py-1">✕</button>
+      </div>
+
+      <div class="mt-4 space-y-5">
+        <!-- Section A: Upload CSV File -->
+        <div class="bg-blue-50/60 border border-blue-200 rounded-2xl p-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 class="text-sm font-bold text-blue-950 flex items-center gap-1.5">
+                <span>📂</span><span>方式一：上傳 CSV 試算表檔案（自動防亂碼）</span>
+              </h4>
+              <p class="text-xs text-stone-600 mt-0.5">欄位順序：<code class="bg-white px-1.5 py-0.5 rounded border">班別, 小隊, 姓名, 學號(選填), 榮譽總分(選填), 可用點數(選填)</code></p>
+            </div>
+            <button id="modalDownloadTemplateBtn" type="button" class="text-xs bg-white hover:bg-stone-50 text-blue-800 border border-blue-300 font-semibold px-3 py-1.5 rounded-xl transition">
+              📄 先下載 CSV 範本檔
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3 pt-1">
+            <input id="csvFileInput" type="file" accept=".csv,.txt" class="text-xs text-stone-600 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-700 file:text-white hover:file:bg-blue-800 cursor-pointer" />
+            <label class="flex items-center gap-1.5 text-xs text-stone-700 font-medium cursor-pointer">
+              <input id="csvReplaceModeCheckbox" type="checkbox" class="rounded text-blue-700" />
+              <span>清空舊名單並以匯入檔案完全覆蓋（預設為附加／更新同姓名學員）</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Section B: Copy-Paste from Excel / LINE -->
+        <div class="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-sm font-bold text-amber-950 flex items-center gap-1.5">
+              <span>📋</span><span>方式二：從 Excel / Google 試算表 / LINE 直接複製貼上</span>
+            </h4>
+            <select id="pasteTargetClassSelect" aria-label="貼上目標班別" class="text-xs bg-white border border-amber-300 rounded-xl px-2.5 py-1.5 font-semibold text-amber-950">
+              <option value="kids">匯入至：📖 兒童讀經班</option>
+              <option value="youth">匯入至：🌱 青少年班</option>
+            </select>
+          </div>
+          <p class="text-xs text-stone-600">
+            可直接從 Excel 選取「<strong>小隊、姓名</strong>」兩欄複製貼上，或每行輸入一筆（例如：<code class="bg-white px-1 rounded">孝順隊, 林小華</code> 或單純一行一個姓名 <code class="bg-white px-1 rounded">林小華</code>）。若小隊名稱不存在，系統會自動幫你新增該小隊！
+          </p>
+          <textarea id="pasteRosterTextarea" rows="4" placeholder="範例（每行一位學員，可用逗號或空白分隔小隊與姓名）：&#10;孝順隊, 王小宇&#10;仁愛隊, 陳小希&#10;感恩隊, 張小恩" class="w-full text-xs sm:text-sm bg-white border border-stone-300 rounded-xl p-3 focus:outline-none focus:border-amber-600 font-mono"></textarea>
+          <div class="flex justify-end gap-2">
+            <button id="clearExistingRosterBtn" type="button" class="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-semibold px-3 py-2 rounded-xl transition">
+              🗑️ 清空本班現有名單
+            </button>
+            <button id="confirmPasteImportBtn" type="button" class="text-xs sm:text-sm bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2 rounded-xl shadow-sm transition">
+              🚀 立即貼上匯入名單
+            </button>
+          </div>
+        </div>
+
+        <!-- Section C: Customize Class Names & Team Lists -->
+        <div class="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3">
+          <h4 class="text-sm font-bold text-stone-800 flex items-center gap-1.5">
+            <span>🏷️</span><span>方式三：自訂佛堂名稱、班別名稱與小隊清單（用逗號分隔）</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
+              <label for="configTempleTitleInput" class="block text-xs font-semibold text-stone-600 mb-1">佛堂與系統標題</label>
+              <input id="configTempleTitleInput" type="text" class="w-full text-xs sm:text-sm bg-white border border-stone-300 rounded-xl px-3 py-2 font-semibold" />
+            </div>
+            <div>
+              <label for="configKidsNameInput" class="block text-xs font-semibold text-stone-600 mb-1">第一班別名稱（原：兒童讀經班）</label>
+              <input id="configKidsNameInput" type="text" class="w-full text-xs sm:text-sm bg-white border border-stone-300 rounded-xl px-3 py-1.5 font-semibold" />
+              <label for="configKidsTeamsInput" class="block text-xs font-semibold text-stone-500 mt-2 mb-1">所屬小隊清單（以逗號分隔）</label>
+              <input id="configKidsTeamsInput" type="text" class="w-full text-xs bg-white border border-stone-300 rounded-xl px-3 py-1.5" />
+            </div>
+            <div>
+              <label for="configYouthNameInput" class="block text-xs font-semibold text-stone-600 mb-1">第二班別名稱（原：青少年班）</label>
+              <input id="configYouthNameInput" type="text" class="w-full text-xs sm:text-sm bg-white border border-stone-300 rounded-xl px-3 py-1.5 font-semibold" />
+              <label for="configYouthTeamsInput" class="block text-xs font-semibold text-stone-500 mt-2 mb-1">所屬小隊清單（以逗號分隔）</label>
+              <input id="configYouthTeamsInput" type="text" class="w-full text-xs bg-white border border-stone-300 rounded-xl px-3 py-1.5" />
+            </div>
+          </div>
+          <div class="flex justify-end">
+            <button id="saveClassConfigBtn" type="button" class="text-xs sm:text-sm bg-stone-800 hover:bg-stone-900 text-white font-bold px-4 py-2 rounded-xl transition">
+              💾 儲存班別與小隊設定
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'temple_checkin_annual_v2';
+
+      const CLASS_CONFIG = {
+        kids: {
+          name: '兒童讀經班',
+          teams: ['孝順隊', '仁愛隊', '智慧隊'],
+          rules: [
+            { id: 'k_ontime', label: '準時報到', points: 10, icon: '⏰', isCheckin: true },
+            { id: 'k_book', label: '自備讀經本＆穿班服', points: 5, icon: '📘', isCheckin: false },
+            { id: 'k_recite1', label: '背經通過（一段）', points: 15, icon: '🗣️', isCheckin: false },
+            { id: 'k_recite2', label: '背經通過（全章）', points: 30, icon: '📜', isCheckin: false },
+            { id: 'k_lead', label: '上台帶讀經典', points: 20, icon: '🎤', isCheckin: false },
+            { id: 'k_service', label: '佛堂小幫手（排椅/擦桌）', points: 15, icon: '🧹', isCheckin: false },
+            { id: 'k_parent', label: '家長陪同共讀', points: 10, icon: '👨‍👩‍👧', isCheckin: false },
+            { id: 'k_friend', label: '邀請新同學參班', points: 30, icon: '🤝', isCheckin: false }
+          ],
+          deductRules: [
+            { id: 'kd_order', label: '課堂秩序提醒（講話/奔跑）', points: 5, icon: '🤫' },
+            { id: 'kd_nobook', label: '未帶讀經本或聯絡簿', points: 5, icon: '📕' },
+            { id: 'kd_clean', label: '座位環境未整理', points: 5, icon: '🗑️' },
+            { id: 'kd_late', label: '無故遲到或早退調整', points: 5, icon: '⏳' }
+          ]
+        },
+        youth: {
+          name: '青少年班',
+          teams: ['慈悲組', '精進組', '喜捨組'],
+          rules: [
+            { id: 'y_ontime', label: '準時報到', points: 10, icon: '⏰', isCheckin: true },
+            { id: 'y_share', label: '課堂提問與心得分享', points: 20, icon: '💡', isCheckin: false },
+            { id: 'y_service', label: '佛堂行功（音控/接待/環保）', points: 25, icon: '🙏', isCheckin: false },
+            { id: 'y_care', label: '帶領讀經班弟妹', points: 25, icon: '🌟', isCheckin: false },
+            { id: 'y_full', label: '全程參與不滑手機', points: 15, icon: '📵', isCheckin: false },
+            { id: 'y_friend', label: '邀約新朋友參班', points: 40, icon: '🎉', isCheckin: false }
+          ],
+          deductRules: [
+            { id: 'yd_phone', label: '上課期間不當使用手機', points: 10, icon: '📱' },
+            { id: 'yd_order', label: '團體秩序或禮節提醒', points: 10, icon: '⚠️' },
+            { id: 'yd_duty', label: '輪值行功未到場', points: 10, icon: '🧹' },
+            { id: 'yd_late', label: '無故遲到或早退調整', points: 5, icon: '⏳' }
+          ]
+        }
+      };
+
+      const GIFT_CATALOG = [
+        { id: 'g1', name: '智慧文具組（鉛筆＋橡皮擦）', cost: 30, icon: '✏️', desc: '適合兒童讀經班日常獎勵' },
+        { id: 'g2', name: '精美讀經隨身筆記本', cost: 50, icon: '📓', desc: '燙金封面佛堂紀念筆記本' },
+        { id: 'g3', name: '佛堂平安健康點心盒', cost: 80, icon: '🍪', desc: '天然蔬食餅乾與堅果結緣品' },
+        { id: 'g4', name: '24色彩繪色鉛筆禮盒', cost: 120, icon: '🎨', desc: '期中讀經表現優良熱門獎品' },
+        { id: 'g5', name: '保溫隨行環保杯', cost: 180, icon: '🥤', desc: '青少年班與讀經班高人氣實用品' },
+        { id: 'g6', name: '年度精進狀元大禮包', cost: 250, icon: '🏆', desc: '年底結業典禮特優大獎' }
+      ];
+
+      function getDefaultState() {
+        const today = '2026-10-15';
+        return {
+          templeTitle: '慈光佛堂｜年度班程報到加分系統',
+          kidsClassName: '兒童讀經班',
+          kidsTeams: ['孝順隊', '仁愛隊', '智慧隊'],
+          youthClassName: '青少年班',
+          youthTeams: ['慈悲組', '精進組', '喜捨組'],
+          yearLabel: '2026 年度',
+          activeClass: 'kids',
+          activeTab: 'checkin',
+          sessionDate: today,
+          soundEnabled: true,
+          isAdmin: true,
+          adminPin: '8888',
+          teamFilter: 'all',
+          statusFilter: 'all',
+          searchQuery: '',
+          students: [
+            { id: 'K01', classType: 'kids', name: '林宥辰', team: '孝順隊', honorPoints: 215, availablePoints: 165, attendedDates: ['2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08', today] },
+            { id: 'K02', classType: 'kids', name: '陳品妍', team: '孝順隊', honorPoints: 310, availablePoints: 230, attendedDates: ['2026-09-10', '2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08', today] },
+            { id: 'K03', classType: 'kids', name: '張宇恩', team: '仁愛隊', honorPoints: 145, availablePoints: 145, attendedDates: ['2026-09-24', '2026-10-01', '2026-10-08'] },
+            { id: 'K04', classType: 'kids', name: '黃子晴', team: '仁愛隊', honorPoints: 260, availablePoints: 140, attendedDates: ['2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08', today] },
+            { id: 'K05', classType: 'kids', name: '李承翰', team: '智慧隊', honorPoints: 95, availablePoints: 65, attendedDates: ['2026-10-01', '2026-10-08'] },
+            { id: 'K06', classType: 'kids', name: '吳采潔', team: '智慧隊', honorPoints: 185, availablePoints: 185, attendedDates: ['2026-09-17', '2026-10-01', '2026-10-08'] },
+            { id: 'Y01', classType: 'youth', name: '王冠廷', team: '慈悲組', honorPoints: 280, availablePoints: 200, attendedDates: ['2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08', today] },
+            { id: 'Y02', classType: 'youth', name: '許芷瑜', team: '慈悲組', honorPoints: 340, availablePoints: 160, attendedDates: ['2026-09-10', '2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08', today] },
+            { id: 'Y03', classType: 'youth', name: '劉柏均', team: '精進組', honorPoints: 190, availablePoints: 190, attendedDates: ['2026-09-24', '2026-10-01', '2026-10-08'] },
+            { id: 'Y04', classType: 'youth', name: '蔡宜蓁', team: '精進組', honorPoints: 235, availablePoints: 155, attendedDates: ['2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08'] },
+            { id: 'Y05', classType: 'youth', name: '鄭宇翔', team: '喜捨組', honorPoints: 160, availablePoints: 160, attendedDates: ['2026-09-24', '2026-10-08'] },
+            { id: 'Y06', classType: 'youth', name: '楊詠晴', team: '喜捨組', honorPoints: 295, availablePoints: 245, attendedDates: ['2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08'] }
+          ],
+          logs: [
+            { id: 'L105', timestamp: '10:55:12', sessionDate: today, classType: 'kids', studentId: 'K02', studentName: '陳品妍', reason: '背經通過（全章）', honorDelta: 30, balanceDelta: 30, isCheckin: false },
+            { id: 'L104', timestamp: '10:42:05', sessionDate: today, classType: 'youth', studentId: 'Y02', studentName: '許芷瑜', reason: '準時報到', honorDelta: 10, balanceDelta: 10, isCheckin: true },
+            { id: 'L103', timestamp: '10:40:18', sessionDate: today, classType: 'youth', studentId: 'Y01', studentName: '王冠廷', reason: '準時報到', honorDelta: 10, balanceDelta: 10, isCheckin: true },
+            { id: 'L102', timestamp: '10:35:40', sessionDate: today, classType: 'kids', studentId: 'K04', studentName: '黃子晴', reason: '準時報到', honorDelta: 10, balanceDelta: 10, isCheckin: true },
+            { id: 'L101', timestamp: '10:32:11', sessionDate: today, classType: 'kids', studentId: 'K02', studentName: '陳品妍', reason: '準時報到', honorDelta: 10, balanceDelta: 10, isCheckin: true },
+            { id: 'L100', timestamp: '10:30:04', sessionDate: today, classType: 'kids', studentId: 'K01', studentName: '林宥辰', reason: '準時報到', honorDelta: 10, balanceDelta: 10, isCheckin: true }
+          ]
+        };
+      }
+
+      let state = getDefaultState();
+      let currentModalStudentId = null;
+      let audioCtx = null;
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.students)) {
+              state = Object.assign(getDefaultState(), parsed);
+            }
+          }
+        } catch (err) {
+          // Ignore storage errors in sandboxed iframe
+        }
+        // 若部署於 Google Apps Script 雲端環境，自動同步雲端資料並預設為家長唯讀模式
+        if (typeof window.google !== 'undefined' && window.google.script && window.google.script.run) {
+          state.isAdmin = false;
+          window.google.script.run.withSuccessHandler(function (cloudRaw) {
+            if (cloudRaw) {
+              try {
+                const cloudParsed = JSON.parse(cloudRaw);
+                if (cloudParsed && Array.isArray(cloudParsed.students)) {
+                  const keepAdmin = state.isAdmin;
+                  state = Object.assign(getDefaultState(), cloudParsed);
+                  state.isAdmin = keepAdmin;
+                  renderAll();
+                }
+              } catch (e) {}
+            }
+          }).getCloudState();
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (err) {
+          // Ignore storage errors in sandboxed iframe
+        }
+        if (typeof window.google !== 'undefined' && window.google.script && window.google.script.run) {
+          try {
+            const payload = JSON.stringify(Object.assign({}, state, { isAdmin: false }));
+            window.google.script.run.saveCloudState(payload);
+          } catch (e) {}
+        }
+      }
+
+      function playChime(type) {
+        if (!state.soundEnabled) return;
+        try {
+          if (!audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) audioCtx = new AudioContextClass();
+          }
+          if (!audioCtx) return;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          if (type === 'checkin' || type === 'points') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.08);
+            osc.frequency.setValueAtTime(783.99, now + 0.16);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+            osc.start(now);
+            osc.stop(now + 0.38);
+          } else if (type === 'deduct') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(330, now);
+            osc.frequency.setValueAtTime(261.63, now + 0.12);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+            osc.start(now);
+            osc.stop(now + 0.32);
+          } else if (type === 'redeem') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(587.33, now);
+            osc.frequency.setValueAtTime(880, now + 0.12);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+            osc.start(now);
+            osc.stop(now + 0.42);
+          }
+        } catch (e) {
+          // Audio blocked or unsupported
+        }
+      }
+
+      function showToast(message, tone) {
+        const container = document.getElementById('toastContainer');
+        const el = document.createElement('div');
+        const bgClass =
+          tone === 'warn'
+            ? 'bg-red-700 text-white'
+            : tone === 'gift'
+            ? 'bg-purple-800 text-white'
+            : 'bg-stone-900 text-amber-100';
+        el.className = `${bgClass} px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center justify-between gap-2 animate-pop pointer-events-auto`;
+        el.innerHTML = `<span>${message}</span>`;
+        container.appendChild(el);
+        setTimeout(() => {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 3200);
+      }
+
+      function getRankInfo(honorPoints) {
+        if (honorPoints >= 300) return { title: '👑 智慧小狀元', badgeClass: 'bg-yellow-100 text-amber-900 border-amber-300' };
+        if (honorPoints >= 200) return { title: '🏅 讀經小舉人', badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+        if (honorPoints >= 100) return { title: '📜 勤學小秀才', badgeClass: 'bg-blue-50 text-blue-800 border-blue-200' };
+        return { title: '🌱 初學小書僮', badgeClass: 'bg-stone-100 text-stone-700 border-stone-200' };
+      }
+
+      function getNowTimeStr() {
+        const d = new Date();
+        return d.toTimeString().slice(0, 8);
+      }
+
+      function addPointsToStudent(studentId, reason, points, isCheckin) {
+        if (!state.isAdmin) {
+          showToast('🔒 目前為「家長／學員唯讀模式」，請先點右上角登入壇務權限', 'warn');
+          return false;
+        }
+        const student = state.students.find((s) => s.id === studentId);
+        if (!student) return false;
+
+        if (isCheckin && student.attendedDates.includes(state.sessionDate)) {
+          showToast(`⚠️ ${student.name} 於 ${state.sessionDate} 已經報到過囉！`, 'warn');
+          return false;
+        }
+
+        if (isCheckin) {
+          student.attendedDates.push(state.sessionDate);
+        }
+
+        student.honorPoints = Math.max(0, student.honorPoints + points);
+        student.availablePoints = Math.max(0, student.availablePoints + points);
+
+        state.logs.unshift({
+          id: 'L' + Date.now() + Math.floor(Math.random() * 1000),
+          timestamp: getNowTimeStr(),
+          sessionDate: state.sessionDate,
+          classType: student.classType,
+          studentId: student.id,
+          studentName: student.name,
+          reason: reason,
+          honorDelta: points,
+          balanceDelta: points,
+          isCheckin: !!isCheckin
+        });
+
+        saveState();
+        if (points >= 0) {
+          playChime(isCheckin ? 'checkin' : 'points');
+          showToast(`🎉 ${student.name}「${reason}」+${points} 分！（可用：${student.availablePoints} 點）`, 'ok');
+        } else {
+          playChime('deduct');
+          showToast(`⚠️ ${student.name}「${reason}」${points} 分（可用：${student.availablePoints} 點）`, 'warn');
+        }
+        renderAll();
+        return true;
+      }
+
+      function redeemGiftForStudent(studentId, gift) {
+        if (!state.isAdmin) {
+          showToast('🔒 請先切換至「壇務管理模式」再幫學員扣點兌換獎品', 'warn');
+          return;
+        }
+        const student = state.students.find((s) => s.id === studentId);
+        if (!student) return;
+        if (student.availablePoints < gift.cost) {
+          showToast(`⚠️ ${student.name} 可用點數不足（目前 ${student.availablePoints} 點，需 ${gift.cost} 點）`, 'warn');
+          return;
+        }
+
+        student.availablePoints -= gift.cost;
+        state.logs.unshift({
+          id: 'L' + Date.now() + Math.floor(Math.random() * 1000),
+          timestamp: getNowTimeStr(),
+          sessionDate: state.sessionDate,
+          classType: student.classType,
+          studentId: student.id,
+          studentName: student.name,
+          reason: `🎁 兌換：${gift.name}`,
+          honorDelta: 0,
+          balanceDelta: -gift.cost,
+          isCheckin: false
+        });
+
+        saveState();
+        playChime('redeem');
+        showToast(`🎁 ${student.name} 兌換「${gift.name}」成功！扣除 ${gift.cost} 點（榮譽總分不變）`, 'gift');
+        renderAll();
+      }
+
+      function undoLogEntry(logId) {
+        if (!state.isAdmin) {
+          showToast('🔒 僅限壇務管理員可撤銷紀錄', 'warn');
+          return;
+        }
+        const idx = state.logs.findIndex((l) => l.id === logId);
+        if (idx === -1) return;
+        const log = state.logs[idx];
+        const student = state.students.find((s) => s.id === log.studentId);
+        if (student) {
+          student.honorPoints = Math.max(0, student.honorPoints - log.honorDelta);
+          student.availablePoints = Math.max(0, student.availablePoints - log.balanceDelta);
+          if (log.isCheckin) {
+            student.attendedDates = student.attendedDates.filter((d) => d !== log.sessionDate);
+          }
+        }
+        state.logs.splice(idx, 1);
+        saveState();
+        showToast(`↩️ 已撤銷 ${log.studentName} 的「${log.reason}」紀錄`, 'warn');
+        renderAll();
+      }
+
+      function syncCustomClassConfig() {
+        if (state.kidsClassName) CLASS_CONFIG.kids.name = state.kidsClassName;
+        if (Array.isArray(state.kidsTeams) && state.kidsTeams.length > 0) CLASS_CONFIG.kids.teams = state.kidsTeams;
+        if (state.youthClassName) CLASS_CONFIG.youth.name = state.youthClassName;
+        if (Array.isArray(state.youthTeams) && state.youthTeams.length > 0) CLASS_CONFIG.youth.teams = state.youthTeams;
+        if (state.templeTitle) {
+          document.getElementById('templeNameDisplay').textContent = state.templeTitle;
+        }
+        const kidsBtn = document.getElementById('switchKidsBtn');
+        const youthBtn = document.getElementById('switchYouthBtn');
+        if (kidsBtn) {
+          kidsBtn.querySelector('.font-bold').textContent = CLASS_CONFIG.kids.name;
+          kidsBtn.querySelector('.text-xs').textContent = CLASS_CONFIG.kids.teams.join(' / ');
+        }
+        if (youthBtn) {
+          youthBtn.querySelector('.font-bold').textContent = CLASS_CONFIG.youth.name;
+          youthBtn.querySelector('.text-xs').textContent = CLASS_CONFIG.youth.teams.join(' / ');
+        }
+      }
+
+      function renderHeaderAndStats() {
+        syncCustomClassConfig();
+        document.getElementById('currentYearBadge').textContent = state.yearLabel;
+        document.getElementById('sessionDateInput').value = state.sessionDate;
+        document.getElementById('soundIcon').textContent = state.soundEnabled ? '🔊' : '🔇';
+        document.getElementById('soundText').textContent = state.soundEnabled ? '音效開啟' : '靜音模式';
+        document.getElementById('pinHintCode').textContent = state.adminPin;
+
+        // Role UI
+        const roleBtn = document.getElementById('roleToggleBtn');
+        const roleIcon = document.getElementById('roleIcon');
+        const roleText = document.getElementById('roleText');
+        const roleNoticeText = document.getElementById('roleNoticeText');
+        const quickScanBtn = document.getElementById('quickScanBtn');
+        const adminToolbar = document.getElementById('adminQuickToolbar');
+        const tabCheckinLabel = document.getElementById('tabCheckinLabel');
+
+        if (state.isAdmin) {
+          roleBtn.className = 'text-xs sm:text-sm bg-emerald-400 hover:bg-emerald-300 text-stone-950 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition';
+          roleIcon.textContent = '🛠️';
+          roleText.textContent = '壇務管理模式（點擊切換唯讀）';
+          roleNoticeText.textContent = '🔓 目前為【壇務管理權限】：可執行點名報到、加分、扣分調整、好禮兌換與名冊管理。';
+          quickScanBtn.classList.remove('hidden');
+          adminToolbar.classList.remove('hidden');
+          tabCheckinLabel.textContent = '點名與快速加分';
+        } else {
+          roleBtn.className = 'text-xs sm:text-sm bg-white hover:bg-amber-50 text-amber-950 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition';
+          roleIcon.textContent = '👀';
+          roleText.textContent = '家長／學員檢視模式（點此壇務登入）';
+          roleNoticeText.textContent = '🔒 目前為【家長／學員唯讀檢視模式】：可查詢個人出席、加扣分明細與排行榜，無法自行修改分數。';
+          quickScanBtn.classList.add('hidden');
+          adminToolbar.classList.add('hidden');
+          tabCheckinLabel.textContent = '學員出席與積分查詢';
+        }
+
+        const kidsBtn = document.getElementById('switchKidsBtn');
+        const youthBtn = document.getElementById('switchYouthBtn');
+        if (state.activeClass === 'kids') {
+          kidsBtn.className = 'class-active-kids rounded-xl p-3 text-left transition flex items-center gap-3';
+          youthBtn.className = 'bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl p-3 text-left transition flex items-center gap-3';
+        } else {
+          youthBtn.className = 'class-active-youth rounded-xl p-3 text-left transition flex items-center gap-3';
+          kidsBtn.className = 'bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl p-3 text-left transition flex items-center gap-3';
+        }
+
+        const classStudents = state.students.filter((s) => s.classType === state.activeClass);
+        const checkedInCount = classStudents.filter((s) => s.attendedDates.includes(state.sessionDate)).length;
+        const totalCount = classStudents.length;
+        const pct = totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0;
+
+        document.getElementById('activeClassCountLabel').textContent = `${CLASS_CONFIG[state.activeClass].name}・共 ${totalCount} 位學員`;
+        document.getElementById('statCheckedIn').textContent = checkedInCount;
+        document.getElementById('statTotalStudents').textContent = totalCount;
+        document.getElementById('statAttendanceBar').style.width = `${pct}%`;
+
+        const todayLogs = state.logs.filter(
+          (l) => l.sessionDate === state.sessionDate && l.classType === state.activeClass && l.honorDelta !== 0
+        );
+        const todayPts = todayLogs.reduce((acc, l) => acc + l.honorDelta, 0);
+        document.getElementById('statTodayPoints').textContent = todayPts >= 0 ? `+${todayPts}` : `${todayPts}`;
+        document.getElementById('statTodayActions').textContent =
+          todayLogs.length > 0 ? `今日共 ${todayLogs.length} 筆加減分紀錄` : '尚無今日加減分紀錄';
+
+        const sortedByHonor = [...classStudents].sort((a, b) => b.honorPoints - a.honorPoints);
+        if (sortedByHonor.length > 0) {
+          document.getElementById('statTopStudent').textContent = `${sortedByHonor[0].name}（${sortedByHonor[0].team}）`;
+          document.getElementById('statTopScore').textContent = `年度榮譽 ${sortedByHonor[0].honorPoints} 分`;
+        } else {
+          document.getElementById('statTopStudent').textContent = '-';
+          document.getElementById('statTopScore').textContent = '年度累積 0 分';
+        }
+      }
+
+      function renderTabs() {
+        const tabs = [
+          { key: 'checkin', btn: 'tabBtnCheckin', view: 'viewCheckin' },
+          { key: 'leaderboard', btn: 'tabBtnLeaderboard', view: 'viewLeaderboard' },
+          { key: 'redeem', btn: 'tabBtnRedeem', view: 'viewRedeem' },
+          { key: 'manage', btn: 'tabBtnManage', view: 'viewManage' }
+        ];
+        tabs.forEach((t) => {
+          const btnEl = document.getElementById(t.btn);
+          const viewEl = document.getElementById(t.view);
+          if (state.activeTab === t.key) {
+            btnEl.className = 'tab-active px-4 py-2 rounded-xl text-sm transition flex items-center gap-1.5';
+            viewEl.classList.remove('hidden');
+          } else {
+            btnEl.className = 'text-stone-600 hover:bg-stone-100 px-4 py-2 rounded-xl text-sm transition flex items-center gap-1.5';
+            viewEl.classList.add('hidden');
+          }
+        });
+      }
+
+      function renderCheckinView() {
+        const teams = CLASS_CONFIG[state.activeClass].teams;
+        const filterContainer = document.getElementById('teamFilterContainer');
+        const allTeams = ['all', ...teams];
+
+        filterContainer.innerHTML = allTeams
+          .map((t) => {
+            const active = state.teamFilter === t;
+            const label = t === 'all' ? '全部小隊' : t;
+            const cls = active
+              ? 'bg-amber-700 text-white font-semibold'
+              : 'bg-stone-100 hover:bg-stone-200 text-stone-700';
+            return `<button type="button" data-team-filter="${t}" class="px-3 py-1.5 rounded-xl text-xs transition ${cls}">${label}</button>`;
+          })
+          .join('');
+
+        const classStudents = state.students.filter((s) => s.classType === state.activeClass);
+        const filtered = classStudents.filter((s) => {
+          if (state.teamFilter !== 'all' && s.team !== state.teamFilter) return false;
+          const isChecked = s.attendedDates.includes(state.sessionDate);
+          if (state.statusFilter === 'checked' && !isChecked) return false;
+          if (state.statusFilter === 'unchecked' && isChecked) return false;
+          if (state.searchQuery.trim() !== '') {
+            const q = state.searchQuery.trim().toLowerCase();
+            if (!s.name.toLowerCase().includes(q) && !s.id.toLowerCase().includes(q)) return false;
+          }
+          return true;
+        });
+
+        const grid = document.getElementById('studentGrid');
+        if (filtered.length === 0) {
+          grid.innerHTML = `<div class="col-span-full warm-card rounded-2xl p-8 text-center text-stone-500 text-sm">找不到符合篩選條件的學員</div>`;
+          return;
+        }
+
+        grid.innerHTML = filtered
+          .map((s) => {
+            const isChecked = s.attendedDates.includes(state.sessionDate);
+            const rank = getRankInfo(s.honorPoints);
+
+            let actionRowHtml = '';
+            if (state.isAdmin) {
+              const checkinBtnHtml = isChecked
+                ? `<button type="button" disabled class="flex-1 bg-emerald-100 text-emerald-800 font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1 cursor-default">
+                     <span>✅</span><span>今日已報到</span>
+                   </button>`
+                : `<button type="button" data-quick-checkin="${s.id}" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1 shadow-sm transition">
+                     <span>👋</span><span>準時報到 +10</span>
+                   </button>`;
+
+              actionRowHtml = `
+                <div class="flex items-center gap-2 pt-1">
+                  ${checkinBtnHtml}
+                  <button type="button" data-open-student-modal="${s.id}" class="bg-stone-800 hover:bg-stone-900 text-amber-100 font-semibold py-2.5 px-3.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1 transition">
+                    <span>⚖️</span><span>加減分</span>
+                  </button>
+                </div>
+              `;
+            } else {
+              actionRowHtml = `
+                <div class="flex items-center gap-2 pt-1">
+                  <button type="button" data-open-student-modal="${s.id}" class="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-semibold py-2 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 transition">
+                    <span>📖</span><span>檢視個人學習存摺與加扣分明細</span>
+                  </button>
+                </div>
+              `;
+            }
+
+            return `
+              <div class="warm-card rounded-2xl p-4 flex flex-col justify-between gap-3 transition hover:border-amber-300">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-xs font-bold bg-stone-100 text-stone-600 px-2 py-0.5 rounded-md">${s.id}</span>
+                      <h3 class="text-base sm:text-lg font-bold text-stone-800">${s.name}</h3>
+                      <span class="text-xs bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-medium">${s.team}</span>
+                    </div>
+                    <div class="mt-1.5 inline-block text-xs px-2 py-0.5 rounded-md border font-medium ${rank.badgeClass}">
+                      ${rank.title}
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xs text-stone-400">可用點數</div>
+                    <div class="text-xl font-extrabold text-emerald-700">${s.availablePoints} <span class="text-xs font-normal">點</span></div>
+                    <div class="text-[11px] text-stone-500">年度榮譽：${s.honorPoints} 分</div>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between text-xs text-stone-500 bg-stone-50 px-3 py-1.5 rounded-lg">
+                  <span>本年度出席：<strong class="text-stone-700">${s.attendedDates.length}</strong> 堂</span>
+                  <span>${isChecked ? '<span class="text-emerald-700 font-semibold">● 今日已到班</span>' : '<span class="text-stone-400">○ 今日未簽到</span>'}</span>
+                </div>
+
+                ${actionRowHtml}
+              </div>
+            `;
+          })
+          .join('');
+      }
+
+      function renderLeaderboardView() {
+        const classStudents = state.students.filter((s) => s.classType === state.activeClass);
+        const teams = CLASS_CONFIG[state.activeClass].teams;
+
+        const teamStats = teams
+          .map((tName) => {
+            const members = classStudents.filter((s) => s.team === tName);
+            const totalHonor = members.reduce((sum, m) => sum + m.honorPoints, 0);
+            const avgHonor = members.length > 0 ? Math.round(totalHonor / members.length) : 0;
+            return { team: tName, count: members.length, totalHonor, avgHonor };
+          })
+          .sort((a, b) => b.totalHonor - a.totalHonor);
+
+        const maxTeamScore = Math.max(1, ...teamStats.map((t) => t.totalHonor));
+        const medals = ['🥇 冠軍小隊', '🥈 亞軍小隊', '🥉 季軍小隊'];
+
+        document.getElementById('teamLeaderboardGrid').innerHTML = teamStats
+          .map((t, idx) => {
+            const barWidth = Math.round((t.totalHonor / maxTeamScore) * 100);
+            return `
+              <div class="bg-stone-50 border border-stone-200 rounded-xl p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full">${medals[idx] || '優良小隊'}</span>
+                  <span class="text-xs text-stone-500">${t.count} 位隊員</span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                  <h3 class="text-lg font-bold text-stone-800">${t.team}</h3>
+                  <div class="text-xl font-extrabold text-amber-700">${t.totalHonor} <span class="text-xs font-normal">總分</span></div>
+                </div>
+                <div class="w-full bg-stone-200 h-2 rounded-full mt-2.5 overflow-hidden">
+                  <div class="bg-amber-600 h-full rounded-full" style="width: ${barWidth}%"></div>
+                </div>
+                <div class="text-xs text-stone-500 mt-2">平均每人榮譽分數：${t.avgHonor} 分</div>
+              </div>
+            `;
+          })
+          .join('');
+
+        const rankedStudents = [...classStudents].sort((a, b) => b.honorPoints - a.honorPoints);
+        document.getElementById('leaderboardTableBody').innerHTML = rankedStudents
+          .map((s, index) => {
+            const rank = getRankInfo(s.honorPoints);
+            const medal = index === 0 ? '🥇 1' : index === 1 ? '🥈 2' : index === 2 ? '🥉 3' : `${index + 1}`;
+            return `
+              <tr class="hover:bg-amber-50/40">
+                <td class="py-3 px-3 font-bold text-stone-700">${medal}</td>
+                <td class="py-3 px-3">
+                  <span class="text-xs text-stone-400 mr-1">${s.id}</span>
+                  <span class="font-bold text-stone-800">${s.name}</span>
+                </td>
+                <td class="py-3 px-3 text-stone-600">${s.team}</td>
+                <td class="py-3 px-3"><span class="text-xs px-2 py-0.5 rounded border ${rank.badgeClass}">${rank.title}</span></td>
+                <td class="py-3 px-3 text-center font-medium text-stone-700">${s.attendedDates.length} 堂</td>
+                <td class="py-3 px-3 text-right font-extrabold text-amber-700">${s.honorPoints} 分</td>
+                <td class="py-3 px-3 text-right font-bold text-emerald-700">${s.availablePoints} 點</td>
+              </tr>
+            `;
+          })
+          .join('');
+      }
+
+      function renderRedeemView() {
+        const classStudents = state.students.filter((s) => s.classType === state.activeClass);
+        const selectEl = document.getElementById('redeemStudentSelect');
+        const currentSelected = selectEl.value;
+
+        selectEl.innerHTML = classStudents
+          .map((s) => `<option value="${s.id}">${s.id} ${s.name}（可用：${s.availablePoints} 點）</option>`)
+          .join('');
+
+        if (classStudents.some((s) => s.id === currentSelected)) {
+          selectEl.value = currentSelected;
+        }
+
+        const activeStudent = classStudents.find((s) => s.id === selectEl.value) || classStudents[0];
+        const banner = document.getElementById('redeemStudentBanner');
+        if (!activeStudent) {
+          banner.innerHTML = `<div class="text-sm text-stone-500">請先新增學員</div>`;
+          document.getElementById('giftCatalogGrid').innerHTML = '';
+          return;
+        }
+
+        const rank = getRankInfo(activeStudent.honorPoints);
+        banner.innerHTML = `
+          <div>
+            <div class="text-xs text-stone-500">目前檢視學員</div>
+            <div class="text-lg font-bold text-stone-800 mt-0.5">${activeStudent.name} <span class="text-xs font-normal text-stone-500">（${activeStudent.team}・${rank.title}）</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <div>
+              <div class="text-xs text-stone-500">年度榮譽總分（兌換不扣減）</div>
+              <div class="text-lg font-bold text-amber-800">${activeStudent.honorPoints} 分</div>
+            </div>
+            <div>
+              <div class="text-xs text-stone-500">目前可用點數餘額</div>
+              <div class="text-2xl font-extrabold text-emerald-700">${activeStudent.availablePoints} 點</div>
+            </div>
+          </div>
+        `;
+
+        document.getElementById('giftCatalogGrid').innerHTML = GIFT_CATALOG.map((g) => {
+          const canAfford = activeStudent.availablePoints >= g.cost;
+          let btnHtml = '';
+          if (!state.isAdmin) {
+            btnHtml = `<span class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 text-stone-500">${canAfford ? '✅ 點數已達標（請找壇務老師兌換）' : `還差 ${g.cost - activeStudent.availablePoints} 點`}</span>`;
+          } else {
+            const btnClass = canAfford
+              ? 'bg-amber-700 hover:bg-amber-800 text-white'
+              : 'bg-stone-200 text-stone-400 cursor-not-allowed';
+            btnHtml = `<button type="button" data-redeem-gift="${g.id}" ${canAfford ? '' : 'disabled'} class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${btnClass}">
+              ${canAfford ? '壇務扣點兌換' : '點數不足'}
+            </button>`;
+          }
+
+          return `
+            <div class="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-col justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <div class="text-3xl bg-white w-12 h-12 rounded-xl flex items-center justify-center border border-stone-200 shrink-0">${g.icon}</div>
+                <div>
+                  <h3 class="font-bold text-stone-800 text-sm sm:text-base">${g.name}</h3>
+                  <p class="text-xs text-stone-500 mt-0.5">${g.desc}</p>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pt-2 border-t border-stone-200/70">
+                <span class="text-sm font-extrabold text-amber-800">需 ${g.cost} 點</span>
+                ${btnHtml}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderManageView() {
+        document.getElementById('adminPinUpdateInput').value = state.adminPin;
+        const batchCard = document.getElementById('batchImportManageCard');
+        if (batchCard) {
+          batchCard.className = state.isAdmin ? 'warm-card rounded-2xl p-5' : 'hidden';
+        }
+        document.getElementById('pinSettingBox').className = state.isAdmin ? 'flex items-center gap-2' : 'hidden';
+        document.getElementById('openAnnualResetModalBtn').className = state.isAdmin
+          ? 'bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 font-semibold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition'
+          : 'hidden';
+
+        document.getElementById('logCountBadge').textContent = `共 ${state.logs.length} 筆紀錄`;
+        const tbody = document.getElementById('logsTableBody');
+        if (state.logs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-stone-400 text-sm">尚無任何紀錄</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = state.logs
+          .slice(0, 50)
+          .map((l) => {
+            const cName = l.classType === 'kids' ? '兒童讀經班' : '青少年班';
+            const honorStr = l.honorDelta > 0 ? `+${l.honorDelta}` : `${l.honorDelta}`;
+            const balStr = l.balanceDelta > 0 ? `+${l.balanceDelta}` : `${l.balanceDelta}`;
+            const honorColor = l.honorDelta >= 0 ? 'text-amber-700' : 'text-red-600';
+            const balColor = l.balanceDelta >= 0 ? 'text-emerald-700' : 'text-red-600';
+            const undoHtml = state.isAdmin
+              ? `<button type="button" data-undo-log="${l.id}" class="text-xs text-red-600 hover:underline font-medium">撤銷</button>`
+              : `<span class="text-xs text-stone-400">唯讀</span>`;
+
+            return `
+              <tr class="hover:bg-stone-50">
+                <td class="py-2.5 px-3 text-xs text-stone-500">${l.sessionDate} <span class="text-stone-400">${l.timestamp}</span></td>
+                <td class="py-2.5 px-3 text-xs font-medium text-stone-600">${cName}</td>
+                <td class="py-2.5 px-3 font-bold text-stone-800">${l.studentName}</td>
+                <td class="py-2.5 px-3 text-stone-700">${l.reason}</td>
+                <td class="py-2.5 px-3 text-right font-bold ${honorColor}">${honorStr}</td>
+                <td class="py-2.5 px-3 text-right font-bold ${balColor}">${balStr}</td>
+                <td class="py-2.5 px-3 text-center">${undoHtml}</td>
+              </tr>
+            `;
+          })
+          .join('');
+      }
+
+      function openStudentModal(studentId) {
+        const student = state.students.find((s) => s.id === studentId);
+        if (!student) return;
+        currentModalStudentId = studentId;
+
+        document.getElementById('modalStudentId').textContent = student.id;
+        document.getElementById('modalStudentName').textContent = student.name;
+        document.getElementById('modalStudentTeam').textContent = student.team;
+        document.getElementById('modalStudentHonor').textContent = student.honorPoints;
+        document.getElementById('modalStudentBalance').textContent = student.availablePoints;
+        document.getElementById('modalAttendanceCount').textContent = `本年度已出席 ${student.attendedDates.length} 堂`;
+
+        const adminSection = document.getElementById('modalAdminSection');
+        if (state.isAdmin) {
+          adminSection.classList.remove('hidden');
+          const rules = CLASS_CONFIG[student.classType].rules;
+          const deductRules = CLASS_CONFIG[student.classType].deductRules;
+          const isCheckedToday = student.attendedDates.includes(state.sessionDate);
+
+          document.getElementById('modalPresetRulesGrid').innerHTML = rules
+            .map((r) => {
+              const disabled = r.isCheckin && isCheckedToday;
+              const cls = disabled
+                ? 'bg-stone-100 text-stone-400 border-stone-200 cursor-not-allowed'
+                : 'bg-amber-50/70 hover:bg-amber-100 text-stone-800 border-amber-200';
+              return `
+                <button type="button" data-modal-rule="${r.id}" ${disabled ? 'disabled' : ''} class="border rounded-xl p-2.5 text-left transition flex items-center justify-between gap-2 ${cls}">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-base">${r.icon}</span>
+                    <span class="text-xs font-semibold">${r.label}</span>
+                  </div>
+                  <span class="text-xs font-extrabold text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded-md shrink-0">+${r.points}</span>
+                </button>
+              `;
+            })
+            .join('');
+
+          document.getElementById('modalDeductRulesGrid').innerHTML = deductRules
+            .map((d) => {
+              return `
+                <button type="button" data-modal-deduct="${d.id}" class="border border-red-200 bg-red-50/60 hover:bg-red-100 text-stone-800 rounded-xl p-2.5 text-left transition flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-base">${d.icon}</span>
+                    <span class="text-xs font-semibold">${d.label}</span>
+                  </div>
+                  <span class="text-xs font-extrabold text-red-700 bg-red-200/60 px-2 py-0.5 rounded-md shrink-0">-${d.points}</span>
+                </button>
+              `;
+            })
+            .join('');
+        } else {
+          adminSection.classList.add('hidden');
+        }
+
+        // Render student personal logs
+        const personalLogs = state.logs.filter((l) => l.studentId === student.id);
+        const historyContainer = document.getElementById('modalStudentHistoryList');
+        if (personalLogs.length === 0) {
+          historyContainer.innerHTML = `<div class="text-xs text-stone-400 py-3 text-center">尚無個人加減分明細紀錄</div>`;
+        } else {
+          historyContainer.innerHTML = personalLogs
+            .map((l) => {
+              const deltaStr = l.balanceDelta >= 0 ? `+${l.balanceDelta}` : `${l.balanceDelta}`;
+              const badgeCls = l.balanceDelta >= 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200';
+              return `
+                <div class="flex items-center justify-between bg-stone-50 border border-stone-200/80 rounded-lg px-3 py-1.5 text-xs">
+                  <div>
+                    <span class="text-stone-400 mr-2">${l.sessionDate}</span>
+                    <span class="font-medium text-stone-700">${l.reason}</span>
+                  </div>
+                  <span class="font-bold px-2 py-0.5 rounded border ${badgeCls}">${deltaStr} 點</span>
+                </div>
+              `;
+            })
+            .join('');
+        }
+
+        const modal = document.getElementById('studentActionModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+
+      function closeStudentModal() {
+        const modal = document.getElementById('studentActionModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        currentModalStudentId = null;
+      }
+
+      function downloadCsv(filename, rows) {
+        const bom = '\uFEFF';
+        const csvContent =
+          bom +
+          rows
+            .map((r) =>
+              r
+                .map((field) => {
+                  const str = String(field ?? '');
+                  return `"${str.replace(/"/g, '""')}"`;
+                })
+                .join(',')
+            )
+            .join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      function renderAll() {
+        renderHeaderAndStats();
+        renderTabs();
+        renderCheckinView();
+        renderLeaderboardView();
+        renderRedeemView();
+        renderManageView();
+      }
+
+      // Initialize Event Listeners
+      window.addEventListener('DOMContentLoaded', () => {
+        loadState();
+        renderAll();
+
+        // Role / Permission Toggle & PIN Modal
+        const adminPinModal = document.getElementById('adminPinModal');
+        const adminPinInput = document.getElementById('adminPinInput');
+
+        document.getElementById('roleToggleBtn').addEventListener('click', () => {
+          if (state.isAdmin) {
+            state.isAdmin = false;
+            saveState();
+            renderAll();
+            showToast('👀 已切換為「家長／學員唯讀檢視模式」，加減分按鈕已鎖定', 'ok');
+          } else {
+            adminPinInput.value = '';
+            adminPinModal.classList.remove('hidden');
+            adminPinModal.classList.add('flex');
+            setTimeout(() => adminPinInput.focus(), 80);
+          }
+        });
+
+        function closePinModal() {
+          adminPinModal.classList.add('hidden');
+          adminPinModal.classList.remove('flex');
+        }
+        document.getElementById('closeAdminPinModalBtn').addEventListener('click', closePinModal);
+        document.getElementById('cancelAdminPinBtn').addEventListener('click', closePinModal);
+
+        function verifyAdminPin() {
+          const val = adminPinInput.value.trim();
+          if (val === state.adminPin) {
+            state.isAdmin = true;
+            saveState();
+            closePinModal();
+            renderAll();
+            showToast('🔓 壇務管理權限解鎖成功！現在可以執行報到與加減分', 'ok');
+          } else {
+            showToast('❌ 壇務密碼錯誤，請重新輸入（預設為 8888）', 'warn');
+          }
+        }
+        document.getElementById('confirmAdminPinBtn').addEventListener('click', verifyAdminPin);
+        adminPinInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') verifyAdminPin();
+        });
+
+        document.getElementById('saveAdminPinBtn').addEventListener('click', () => {
+          const newPin = document.getElementById('adminPinUpdateInput').value.trim();
+          if (!newPin) {
+            showToast('⚠️ 密碼不能為空白', 'warn');
+            return;
+          }
+          state.adminPin = newPin;
+          saveState();
+          renderHeaderAndStats();
+          showToast(`🔐 已更新壇務密碼為：${newPin}`, 'ok');
+        });
+
+        // Date Picker
+        document.getElementById('sessionDateInput').addEventListener('change', (e) => {
+          if (e.target.value) {
+            state.sessionDate = e.target.value;
+            saveState();
+            renderAll();
+            showToast(`📅 已切換上課日期為 ${state.sessionDate}`, 'ok');
+          }
+        });
+
+        // Sound Toggle
+        document.getElementById('soundToggleBtn').addEventListener('click', () => {
+          state.soundEnabled = !state.soundEnabled;
+          saveState();
+          renderHeaderAndStats();
+        });
+
+        // Class Switcher
+        document.getElementById('switchKidsBtn').addEventListener('click', () => {
+          state.activeClass = 'kids';
+          state.teamFilter = 'all';
+          saveState();
+          renderAll();
+        });
+        document.getElementById('switchYouthBtn').addEventListener('click', () => {
+          state.activeClass = 'youth';
+          state.teamFilter = 'all';
+          saveState();
+          renderAll();
+        });
+
+        // Navigation Tabs
+        document.getElementById('tabBtnCheckin').addEventListener('click', () => {
+          state.activeTab = 'checkin';
+          renderAll();
+        });
+        document.getElementById('tabBtnLeaderboard').addEventListener('click', () => {
+          state.activeTab = 'leaderboard';
+          renderAll();
+        });
+        document.getElementById('tabBtnRedeem').addEventListener('click', () => {
+          state.activeTab = 'redeem';
+          renderAll();
+        });
+        document.getElementById('tabBtnManage').addEventListener('click', () => {
+          state.activeTab = 'manage';
+          renderAll();
+        });
+
+        // Team Filter Delegation
+        document.getElementById('teamFilterContainer').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-team-filter]');
+          if (!btn) return;
+          state.teamFilter = btn.getAttribute('data-team-filter');
+          renderCheckinView();
+        });
+
+        // Status & Search Filter
+        document.getElementById('statusFilterSelect').addEventListener('change', (e) => {
+          state.statusFilter = e.target.value;
+          renderCheckinView();
+        });
+        document.getElementById('studentSearchInput').addEventListener('input', (e) => {
+          state.searchQuery = e.target.value;
+          renderCheckinView();
+        });
+
+        // Student Card Delegation
+        document.getElementById('studentGrid').addEventListener('click', (e) => {
+          const checkinBtn = e.target.closest('[data-quick-checkin]');
+          if (checkinBtn) {
+            const sid = checkinBtn.getAttribute('data-quick-checkin');
+            addPointsToStudent(sid, '準時報到', 10, true);
+            return;
+          }
+          const modalBtn = e.target.closest('[data-open-student-modal]');
+          if (modalBtn) {
+            const sid = modalBtn.getAttribute('data-open-student-modal');
+            openStudentModal(sid);
+          }
+        });
+
+        // Student Modal Actions
+        document.getElementById('closeStudentModalBtn').addEventListener('click', closeStudentModal);
+        document.getElementById('modalPresetRulesGrid').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-modal-rule]');
+          if (!btn || !currentModalStudentId) return;
+          const ruleId = btn.getAttribute('data-modal-rule');
+          const student = state.students.find((s) => s.id === currentModalStudentId);
+          if (!student) return;
+          const rule = CLASS_CONFIG[student.classType].rules.find((r) => r.id === ruleId);
+          if (!rule) return;
+          addPointsToStudent(currentModalStudentId, rule.label, rule.points, rule.isCheckin);
+          closeStudentModal();
+        });
+
+        document.getElementById('modalDeductRulesGrid').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-modal-deduct]');
+          if (!btn || !currentModalStudentId) return;
+          const deductId = btn.getAttribute('data-modal-deduct');
+          const student = state.students.find((s) => s.id === currentModalStudentId);
+          if (!student) return;
+          const dRule = CLASS_CONFIG[student.classType].deductRules.find((r) => r.id === deductId);
+          if (!dRule) return;
+          addPointsToStudent(currentModalStudentId, dRule.label, -Math.abs(dRule.points), false);
+          closeStudentModal();
+        });
+
+        document.getElementById('submitCustomPointsBtn').addEventListener('click', () => {
+          if (!currentModalStudentId) return;
+          const reason = document.getElementById('customReasonInput').value.trim() || '壇務特別加分';
+          const pts = Math.abs(parseInt(document.getElementById('customPointsInput').value, 10) || 10);
+          addPointsToStudent(currentModalStudentId, reason, pts, false);
+          document.getElementById('customReasonInput').value = '';
+          closeStudentModal();
+        });
+
+        document.getElementById('submitCustomDeductBtn').addEventListener('click', () => {
+          if (!currentModalStudentId) return;
+          const reason = document.getElementById('customReasonInput').value.trim() || '壇務秩序扣分調整';
+          const pts = Math.abs(parseInt(document.getElementById('customPointsInput').value, 10) || 5);
+          addPointsToStudent(currentModalStudentId, reason, -pts, false);
+          document.getElementById('customReasonInput').value = '';
+          closeStudentModal();
+        });
+
+        // Team Batch Bonus / Deduct Modal
+        const teamBonusModal = document.getElementById('teamBonusModal');
+        document.getElementById('openTeamBonusBtn').addEventListener('click', () => {
+          const teams = CLASS_CONFIG[state.activeClass].teams;
+          const select = document.getElementById('batchTargetSelect');
+          select.innerHTML = [
+            `<option value="all_checked">✅ 今日已到班全體學員（${CLASS_CONFIG[state.activeClass].name}）</option>`,
+            ...teams.map((t) => `<option value="team:${t}">🚩 ${t} 全體隊員</option>`)
+          ].join('');
+          teamBonusModal.classList.remove('hidden');
+          teamBonusModal.classList.add('flex');
+        });
+        document.getElementById('closeTeamBonusModalBtn').addEventListener('click', () => {
+          teamBonusModal.classList.add('hidden');
+          teamBonusModal.classList.remove('flex');
+        });
+        document.querySelectorAll('.batch-pts-preset').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            document.getElementById('batchPointsInput').value = btn.getAttribute('data-batch-pts');
+          });
+        });
+
+        function applyTeamBatchPoints(sign) {
+          if (!state.isAdmin) return;
+          const target = document.getElementById('batchTargetSelect').value;
+          const reason = document.getElementById('batchReasonInput').value.trim() || (sign > 0 ? '小隊團體加分' : '小隊團體扣分調整');
+          const rawPts = Math.abs(parseInt(document.getElementById('batchPointsInput').value, 10) || 10);
+          const delta = sign * rawPts;
+
+          const classStudents = state.students.filter((s) => s.classType === state.activeClass);
+          const matched = classStudents.filter((s) => {
+            if (target === 'all_checked') return s.attendedDates.includes(state.sessionDate);
+            if (target.startsWith('team:')) return s.team === target.replace('team:', '');
+            return false;
+          });
+
+          if (matched.length === 0) {
+            showToast('⚠️ 找不到符合條件的學員（若選今日已到班，請先點名）', 'warn');
+            return;
+          }
+
+          matched.forEach((s) => {
+            s.honorPoints = Math.max(0, s.honorPoints + delta);
+            s.availablePoints = Math.max(0, s.availablePoints + delta);
+            state.logs.unshift({
+              id: 'L' + Date.now() + Math.floor(Math.random() * 10000),
+              timestamp: getNowTimeStr(),
+              sessionDate: state.sessionDate,
+              classType: s.classType,
+              studentId: s.id,
+              studentName: s.name,
+              reason: `[團體] ${reason}`,
+              honorDelta: delta,
+              balanceDelta: delta,
+              isCheckin: false
+            });
+          });
+
+          saveState();
+          playChime(delta >= 0 ? 'points' : 'deduct');
+          showToast(
+            delta >= 0
+              ? `⚡ 已為 ${matched.length} 位學員集體加 +${rawPts} 分！`
+              : `⚠️ 已為 ${matched.length} 位學員集體扣 -${rawPts} 分！`,
+            delta >= 0 ? 'ok' : 'warn'
+          );
+          teamBonusModal.classList.add('hidden');
+          teamBonusModal.classList.remove('flex');
+          renderAll();
+        }
+
+        document.getElementById('confirmTeamBonusBtn').addEventListener('click', () => applyTeamBatchPoints(1));
+        document.getElementById('confirmTeamDeductBtn').addEventListener('click', () => applyTeamBatchPoints(-1));
+
+        // Add Student Modal
+        const addStudentModal = document.getElementById('addStudentModal');
+        const newClassSel = document.getElementById('newStudentClassSelect');
+        const newTeamSel = document.getElementById('newStudentTeamSelect');
+
+        function syncNewStudentTeams() {
+          const cType = newClassSel.value;
+          newTeamSel.innerHTML = CLASS_CONFIG[cType].teams
+            .map((t) => `<option value="${t}">${t}</option>`)
+            .join('');
+        }
+        newClassSel.addEventListener('change', syncNewStudentTeams);
+
+        document.getElementById('openAddStudentBtn').addEventListener('click', () => {
+          newClassSel.value = state.activeClass;
+          syncNewStudentTeams();
+          document.getElementById('newStudentNameInput').value = '';
+          addStudentModal.classList.remove('hidden');
+          addStudentModal.classList.add('flex');
+        });
+        document.getElementById('closeAddStudentModalBtn').addEventListener('click', () => {
+          addStudentModal.classList.add('hidden');
+          addStudentModal.classList.remove('flex');
+        });
+        document.getElementById('confirmAddStudentBtn').addEventListener('click', () => {
+          const name = document.getElementById('newStudentNameInput').value.trim();
+          if (!name) {
+            showToast('⚠️ 請輸入學員姓名', 'warn');
+            return;
+          }
+          const cType = newClassSel.value;
+          const prefix = cType === 'kids' ? 'K' : 'Y';
+          const count = state.students.filter((s) => s.classType === cType).length + 1;
+          const newId = prefix + String(count).padStart(2, '0');
+          state.students.push({
+            id: newId,
+            classType: cType,
+            name: name,
+            team: newTeamSel.value,
+            honorPoints: 0,
+            availablePoints: 0,
+            attendedDates: []
+          });
+          state.activeClass = cType;
+          saveState();
+          showToast(`➕ 已新增學員：${newId} ${name}`, 'ok');
+          addStudentModal.classList.add('hidden');
+          addStudentModal.classList.remove('flex');
+          renderAll();
+        });
+
+        // Gift Redemption Events
+        document.getElementById('redeemStudentSelect').addEventListener('change', renderRedeemView);
+        document.getElementById('giftCatalogGrid').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-redeem-gift]');
+          if (!btn) return;
+          const giftId = btn.getAttribute('data-redeem-gift');
+          const gift = GIFT_CATALOG.find((g) => g.id === giftId);
+          const studentId = document.getElementById('redeemStudentSelect').value;
+          if (gift && studentId) {
+            redeemGiftForStudent(studentId, gift);
+          }
+        });
+
+        // Undo Log Delegation
+        document.getElementById('logsTableBody').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-undo-log]');
+          if (!btn) return;
+          undoLogEntry(btn.getAttribute('data-undo-log'));
+        });
+
+        // Quick Scan Modal
+        const quickScanModal = document.getElementById('quickScanModal');
+        const quickScanInput = document.getElementById('quickScanInput');
+        const quickScanResultBox = document.getElementById('quickScanResultBox');
+
+        document.getElementById('quickScanBtn').addEventListener('click', () => {
+          quickScanResultBox.classList.add('hidden');
+          quickScanInput.value = '';
+          quickScanModal.classList.remove('hidden');
+          quickScanModal.classList.add('flex');
+          setTimeout(() => quickScanInput.focus(), 80);
+        });
+        document.getElementById('closeQuickScanModalBtn').addEventListener('click', () => {
+          quickScanModal.classList.add('hidden');
+          quickScanModal.classList.remove('flex');
+        });
+
+        function handleQuickScan() {
+          const q = quickScanInput.value.trim().toLowerCase();
+          if (!q) return;
+          const student = state.students.find(
+            (s) => s.id.toLowerCase() === q || s.name.toLowerCase() === q
+          );
+          quickScanResultBox.classList.remove('hidden');
+          if (!student) {
+            quickScanResultBox.className = 'mt-3 rounded-xl p-3 text-sm font-medium bg-red-50 text-red-700 border border-red-200';
+            quickScanResultBox.textContent = `❌ 找不到學號或姓名為「${quickScanInput.value}」的學員`;
+            return;
+          }
+          const ok = addPointsToStudent(student.id, '準時報到', 10, true);
+          if (ok) {
+            quickScanResultBox.className = 'mt-3 rounded-xl p-3 text-sm font-medium bg-emerald-50 text-emerald-800 border border-emerald-200';
+            quickScanResultBox.textContent = `✅ ${student.id} ${student.name}（${student.team}）報到成功！目前年度總分：${student.honorPoints} 分`;
+            quickScanInput.value = '';
+          } else {
+            quickScanResultBox.className = 'mt-3 rounded-xl p-3 text-sm font-medium bg-amber-50 text-amber-800 border border-amber-200';
+            quickScanResultBox.textContent = `ℹ️ ${student.name} 今日（${state.sessionDate}）已經完成報到囉！`;
+          }
+        }
+        document.getElementById('submitQuickScanBtn').addEventListener('click', handleQuickScan);
+        quickScanInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') handleQuickScan();
+        });
+
+        // CSV Exports
+        document.getElementById('exportRosterCsvBtn').addEventListener('click', () => {
+          const rows = [
+            ['年度', '學號', '班別', '小隊', '姓名', '榮譽稱號', '年度出席堂數', '年度榮譽總分', '目前可用點數']
+          ];
+          state.students.forEach((s) => {
+            rows.push([
+              state.yearLabel,
+              s.id,
+              CLASS_CONFIG[s.classType].name,
+              s.team,
+              s.name,
+              getRankInfo(s.honorPoints).title,
+              s.attendedDates.length,
+              s.honorPoints,
+              s.availablePoints
+            ]);
+          });
+          downloadCsv(`佛堂學員年度積分報表_${state.yearLabel}.csv`, rows);
+          showToast('📊 已匯出學員年度總分報表 CSV！', 'ok');
+        });
+
+        document.getElementById('exportLogsCsvBtn').addEventListener('click', () => {
+          const rows = [
+            ['紀錄ID', '上課日期', '時間', '班別', '學號', '姓名', '項目說明', '榮譽總分變動', '可用點數變動']
+          ];
+          state.logs.forEach((l) => {
+            rows.push([
+              l.id,
+              l.sessionDate,
+              l.timestamp,
+              CLASS_CONFIG[l.classType].name,
+              l.studentId,
+              l.studentName,
+              l.reason,
+              l.honorDelta,
+              l.balanceDelta
+            ]);
+          });
+          downloadCsv(`佛堂報到加分流水帳_${state.yearLabel}.csv`, rows);
+          showToast('📑 已匯出報到加分流水帳 CSV！', 'ok');
+        });
+
+        // Annual Reset Modal
+        const annualResetModal = document.getElementById('annualResetModal');
+        document.getElementById('openAnnualResetModalBtn').addEventListener('click', () => {
+          annualResetModal.classList.remove('hidden');
+          annualResetModal.classList.add('flex');
+        });
+        document.getElementById('closeAnnualResetModalBtn').addEventListener('click', () => {
+          annualResetModal.classList.add('hidden');
+          annualResetModal.classList.remove('flex');
+        });
+        document.getElementById('cancelAnnualResetBtn').addEventListener('click', () => {
+          annualResetModal.classList.add('hidden');
+          annualResetModal.classList.remove('flex');
+        });
+        document.getElementById('confirmAnnualResetBtn').addEventListener('click', () => {
+          const nextLabel = document.getElementById('nextYearLabelInput').value.trim() || '新年度';
+          state.yearLabel = nextLabel;
+          state.students.forEach((s) => {
+            s.honorPoints = 0;
+            s.availablePoints = 0;
+            s.attendedDates = [];
+          });
+          state.logs = [];
+          saveState();
+          annualResetModal.classList.add('hidden');
+          annualResetModal.classList.remove('flex');
+          renderAll();
+          showToast(`🔄 已完成跨年結算，正式進入「${nextLabel}」！`, 'ok');
+        });
+
+        // Batch Import & Class/Team Config Modal Handlers
+        const batchImportModal = document.getElementById('batchImportModal');
+
+        function openBatchImportModal() {
+          if (!state.isAdmin) {
+            showToast('🔒 請先切換為壇務管理權限再匯入名冊', 'warn');
+            return;
+          }
+          syncCustomClassConfig();
+          document.getElementById('pasteTargetClassSelect').value = state.activeClass;
+          document.getElementById('configTempleTitleInput').value = state.templeTitle || '慈光佛堂｜年度班程報到加分系統';
+          document.getElementById('configKidsNameInput').value = CLASS_CONFIG.kids.name;
+          document.getElementById('configKidsTeamsInput').value = CLASS_CONFIG.kids.teams.join(', ');
+          document.getElementById('configYouthNameInput').value = CLASS_CONFIG.youth.name;
+          document.getElementById('configYouthTeamsInput').value = CLASS_CONFIG.youth.teams.join(', ');
+          batchImportModal.classList.remove('hidden');
+          batchImportModal.classList.add('flex');
+        }
+
+        function closeBatchImportModal() {
+          batchImportModal.classList.add('hidden');
+          batchImportModal.classList.remove('flex');
+        }
+
+        document.getElementById('openBatchImportBtn').addEventListener('click', openBatchImportModal);
+        document.getElementById('openBatchImportFromManageBtn').addEventListener('click', openBatchImportModal);
+        document.getElementById('closeBatchImportModalBtn').addEventListener('click', closeBatchImportModal);
+
+        function handleDownloadTemplateCsv() {
+          const rows = [
+            ['班別', '小隊', '姓名', '學號(選填)', '年度榮譽總分(選填)', '目前可用點數(選填)'],
+            [CLASS_CONFIG.kids.name, '孝順隊', '王小宇', 'K01', '0', '0'],
+            [CLASS_CONFIG.kids.name, '仁愛隊', '陳小希', 'K02', '0', '0'],
+            [CLASS_CONFIG.kids.name, '智慧隊', '林小恩', 'K03', '0', '0'],
+            [CLASS_CONFIG.youth.name, '慈悲組', '張大華', 'Y01', '0', '0'],
+            [CLASS_CONFIG.youth.name, '精進組', '李大明', 'Y02', '0', '0']
+          ];
+          downloadCsv('佛堂學員名冊_匯入範本.csv', rows);
+          showToast('📄 已下載 CSV 匯入範本，用 Excel 填寫後即可上傳匯入！', 'ok');
+        }
+
+        document.getElementById('downloadTemplateCsvBtn').addEventListener('click', handleDownloadTemplateCsv);
+        document.getElementById('modalDownloadTemplateBtn').addEventListener('click', handleDownloadTemplateCsv);
+
+        function parseCsvLine(line) {
+          const result = [];
+          let cur = '';
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"') {
+              if (inQuotes && line[i + 1] === '"') {
+                cur += '"';
+                i++;
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if ((ch === ',' || ch === '\t') && !inQuotes) {
+              result.push(cur.trim());
+              cur = '';
+            } else {
+              cur += ch;
+            }
+          }
+          result.push(cur.trim());
+          return result;
+        }
+
+        function resolveClassTypeFromText(rawClassText) {
+          const t = (rawClassText || '').trim().toLowerCase();
+          if (!t) return state.activeClass;
+          if (
+            t.includes('青少') ||
+            t.includes('youth') ||
+            t === 'y' ||
+            t === CLASS_CONFIG.youth.name.toLowerCase()
+          ) {
+            return 'youth';
+          }
+          if (
+            t.includes('兒童') ||
+            t.includes('讀經') ||
+            t.includes('kids') ||
+            t === 'k' ||
+            t === CLASS_CONFIG.kids.name.toLowerCase()
+          ) {
+            return 'kids';
+          }
+          return state.activeClass;
+        }
+
+        function ensureTeamExists(cType, teamName) {
+          const cleanTeam = (teamName || '').trim();
+          if (!cleanTeam) return CLASS_CONFIG[cType].teams[0] || '第一小隊';
+          if (!CLASS_CONFIG[cType].teams.includes(cleanTeam)) {
+            CLASS_CONFIG[cType].teams.push(cleanTeam);
+            if (cType === 'kids') state.kidsTeams = [...CLASS_CONFIG.kids.teams];
+            else state.youthTeams = [...CLASS_CONFIG.youth.teams];
+          }
+          return cleanTeam;
+        }
+
+        function generateNextStudentId(cType) {
+          const prefix = cType === 'kids' ? 'K' : 'Y';
+          let num = state.students.filter((s) => s.classType === cType).length + 1;
+          while (state.students.some((s) => s.id.toUpperCase() === (prefix + String(num).padStart(2, '0')).toUpperCase())) {
+            num++;
+          }
+          return prefix + String(num).padStart(2, '0');
+        }
+
+        function importCsvText(text, replaceAll) {
+          const lines = text
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0);
+          if (lines.length === 0) {
+            showToast('⚠️ 檔案內容為空白', 'warn');
+            return;
+          }
+
+          if (replaceAll) {
+            state.students = [];
+            state.logs = [];
+          }
+
+          let addedCount = 0;
+          let updatedCount = 0;
+
+          lines.forEach((line, idx) => {
+            const cols = parseCsvLine(line);
+            // Skip header row
+            const joined = cols.join('');
+            if (idx === 0 && (joined.includes('姓名') || joined.includes('班別') || joined.includes('小隊'))) {
+              return;
+            }
+
+            let cType = state.activeClass;
+            let team = '';
+            let name = '';
+            let customId = '';
+            let honorPts = 0;
+            let availPts = 0;
+
+            if (cols.length >= 5 && cols[0].includes('年度')) {
+              // Compatible with exported roster CSV: ['年度', '學號', '班別', '小隊', '姓名', '榮譽稱號', '年度出席堂數', '年度榮譽總分', '目前可用點數']
+              customId = cols[1];
+              cType = resolveClassTypeFromText(cols[2]);
+              team = cols[3];
+              name = cols[4];
+              honorPts = parseInt(cols[7], 10) || 0;
+              availPts = parseInt(cols[8], 10) || 0;
+            } else if (cols.length >= 3) {
+              cType = resolveClassTypeFromText(cols[0]);
+              team = cols[1];
+              name = cols[2];
+              customId = cols[3] || '';
+              honorPts = parseInt(cols[4], 10) || 0;
+              availPts = cols[5] !== undefined && cols[5] !== '' ? (parseInt(cols[5], 10) || 0) : honorPts;
+            } else if (cols.length === 2) {
+              team = cols[0];
+              name = cols[1];
+            } else if (cols.length === 1) {
+              name = cols[0];
+            }
+
+            name = (name || '').trim();
+            if (!name) return;
+
+            const finalTeam = ensureTeamExists(cType, team);
+            const existing = state.students.find(
+              (s) => s.classType === cType && (s.name === name || (customId && s.id.toLowerCase() === customId.toLowerCase()))
+            );
+
+            if (existing) {
+              existing.team = finalTeam;
+              existing.name = name;
+              if (honorPts > 0) existing.honorPoints = honorPts;
+              if (availPts > 0) existing.availablePoints = availPts;
+              updatedCount++;
+            } else {
+              const sid = customId ? customId.trim().toUpperCase() : generateNextStudentId(cType);
+              state.students.push({
+                id: sid,
+                classType: cType,
+                name: name,
+                team: finalTeam,
+                honorPoints: honorPts,
+                availablePoints: availPts,
+                attendedDates: []
+              });
+              addedCount++;
+            }
+          });
+
+          saveState();
+          renderAll();
+          closeBatchImportModal();
+          showToast(`🎉 匯入完成！新增 ${addedCount} 位、更新 ${updatedCount} 位學員`, 'ok');
+        }
+
+        document.getElementById('csvFileInput').addEventListener('change', (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          const replaceAll = document.getElementById('csvReplaceModeCheckbox').checked;
+          const reader = new FileReader();
+          reader.onload = function (evt) {
+            const buffer = evt.target.result;
+            let text = '';
+            try {
+              const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+              text = utf8Decoder.decode(buffer);
+            } catch (err) {
+              // Fallback to Big5 for traditional Excel CSV on Windows in Taiwan
+              const big5Decoder = new TextDecoder('big5');
+              text = big5Decoder.decode(buffer);
+            }
+            importCsvText(text, replaceAll);
+            e.target.value = '';
+          };
+          reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('confirmPasteImportBtn').addEventListener('click', () => {
+          const raw = document.getElementById('pasteRosterTextarea').value.trim();
+          if (!raw) {
+            showToast('⚠️ 請先在文字框貼上學員名單', 'warn');
+            return;
+          }
+          const targetClass = document.getElementById('pasteTargetClassSelect').value;
+          state.activeClass = targetClass;
+
+          const lines = raw
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0);
+
+          let added = 0;
+          lines.forEach((line) => {
+            if (line.includes('姓名') && line.includes('小隊')) return;
+            const parts = line.split(/[\t,，、]+/).map((p) => p.trim()).filter(Boolean);
+            let team = '';
+            let name = '';
+            if (parts.length >= 2) {
+              team = parts[0];
+              name = parts[1];
+            } else if (parts.length === 1) {
+              const spaceParts = parts[0].split(/\s+/);
+              if (spaceParts.length >= 2) {
+                team = spaceParts[0];
+                name = spaceParts.slice(1).join(' ');
+              } else {
+                name = parts[0];
+              }
+            }
+            if (!name) return;
+            const finalTeam = ensureTeamExists(targetClass, team);
+            const existing = state.students.find((s) => s.classType === targetClass && s.name === name);
+            if (existing) {
+              existing.team = finalTeam;
+            } else {
+              state.students.push({
+                id: generateNextStudentId(targetClass),
+                classType: targetClass,
+                name: name,
+                team: finalTeam,
+                honorPoints: 0,
+                availablePoints: 0,
+                attendedDates: []
+              });
+              added++;
+            }
+          });
+
+          document.getElementById('pasteRosterTextarea').value = '';
+          saveState();
+          renderAll();
+          closeBatchImportModal();
+          showToast(`🚀 已成功匯入 ${added} 位新學員至「${CLASS_CONFIG[targetClass].name}」！`, 'ok');
+        });
+
+        document.getElementById('clearExistingRosterBtn').addEventListener('click', () => {
+          const targetClass = document.getElementById('pasteTargetClassSelect').value;
+          state.students = state.students.filter((s) => s.classType !== targetClass);
+          state.logs = state.logs.filter((l) => l.classType !== targetClass);
+          saveState();
+          renderAll();
+          showToast(`🗑️ 已清空「${CLASS_CONFIG[targetClass].name}」的預設名單，現在可直接貼上新名單！`, 'warn');
+        });
+
+        document.getElementById('saveClassConfigBtn').addEventListener('click', () => {
+          const tTitle = document.getElementById('configTempleTitleInput').value.trim();
+          const kName = document.getElementById('configKidsNameInput').value.trim();
+          const kTeams = document.getElementById('configKidsTeamsInput').value
+            .split(/[,，、]+/)
+            .map((t) => t.trim())
+            .filter(Boolean);
+          const yName = document.getElementById('configYouthNameInput').value.trim();
+          const yTeams = document.getElementById('configYouthTeamsInput').value
+            .split(/[,，、]+/)
+            .map((t) => t.trim())
+            .filter(Boolean);
+
+          if (tTitle) state.templeTitle = tTitle;
+          if (kName) state.kidsClassName = kName;
+          if (kTeams.length > 0) state.kidsTeams = kTeams;
+          if (yName) state.youthClassName = yName;
+          if (yTeams.length > 0) state.youthTeams = yTeams;
+
+          saveState();
+          renderAll();
+          closeBatchImportModal();
+          showToast('💾 已儲存佛堂標題、班別名稱與小隊清單！', 'ok');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
