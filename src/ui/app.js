@@ -90,20 +90,24 @@
     if (sending || queue.length === 0) return;
     sending = true;
     const item = queue[0];
-    App.s.backend.apply(item.op).then(function (res) {
+    function settle() {
       queue.shift();
-      confirmed = res.state;
-      item.resolve(res);
-    }, function (err) {
-      queue.shift();
-      item.reject(err);
-      App.handleError(err);
-    }).then(function () {
       sending = false;
       App.s.pending = queue.length;
       if (queue.length === 0 && confirmed) App.s.data = confirmed;
       else replayPending();
       App.render();
+    }
+    // 先更新畫面資料再通知呼叫端，呼叫端拿到結果時就能看到新資料
+    App.s.backend.apply(item.op).then(function (res) {
+      confirmed = res.state;
+      settle();
+      item.resolve(res);
+      pump();
+    }, function (err) {
+      settle();
+      item.reject(err);
+      App.handleError(err);
       pump();
     });
   }
