@@ -8,6 +8,8 @@
 - v3 開發中：動態班別、課次、服務人員名冊，以及「擁有者／壇務／訪客」三級權限。
   - `src/store.js`：v3 資料層（已完成，說明見 [docs/data-model.md](docs/data-model.md)）
   - `src/migrate-v2.js`：v2 資料自動移轉（已完成）
+  - `src/auth.js`：擁有者／壇務／訪客權限（已完成，說明見 [docs/permissions.md](docs/permissions.md)）
+  - `src/Code.js`：Google Apps Script 後端（已完成，部署見 [docs/deploy-gas.md](docs/deploy-gas.md)）
   - 介面尚未接上 v3 資料層（階段 3）
 
 ## 開發
