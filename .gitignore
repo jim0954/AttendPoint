@@ -14,3 +14,6 @@ desktop.ini
 data/
 *.csv
 !docs/samples/*.csv
+
+# clasp 專案設定（每個人的 scriptId 不同，請由 .clasp.json.example 複製）
+.clasp.json
