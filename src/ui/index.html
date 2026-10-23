@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="attendpoint-version" content="@VERSION@" />
+  <title>佛堂點名加分系統</title>
+  <!-- @styles -->
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">🪷</span>
+          <div class="brand-text">
+            <h1 id="templeTitle">佛堂點名加分系統</h1>
+            <span id="yearLabel" class="chip chip-soft"></span>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" class="btn btn-ghost btn-icon" data-action="toggle-sound" id="soundBtn" title="音效">🔊</button>
+          <button type="button" class="btn btn-ghost" data-action="refresh" title="重新整理">↻</button>
+          <button type="button" class="btn" data-action="open-login" id="userBtn">🔒 壇務登入</button>
+        </div>
+      </div>
+      <div id="modeBanner" class="mode-banner"></div>
+    </header>
+
+    <main class="container">
+      <nav id="classBar" class="class-bar" aria-label="班別"></nav>
+      <section id="sessionBar" class="session-bar"></section>
+      <nav id="tabBar" class="tab-bar" aria-label="功能"></nav>
+      <section id="view" class="view" aria-live="polite"></section>
+    </main>
+
+    <footer class="footer">
+      <span id="syncStatus"></span>
+      <span>AttendPoint v@VERSION@</span>
+    </footer>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="assertive"></div>
+
+  <!-- @scripts -->
+</body>
+</html>

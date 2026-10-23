@@ -17,3 +17,6 @@ data/
 
 # clasp 專案設定（每個人的 scriptId 不同，請由 .clasp.json.example 複製）
 .clasp.json
+
+# 建置產物（npm run build 產生）
+dist/
