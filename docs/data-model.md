@@ -32,7 +32,7 @@ state
 | `name` | 班名（不可重複） |
 | `icon`、`themeColor` | 圖示、主題色 |
 | `idPrefix` | 學號前綴，1–3 碼英數（不可重複），例如 `K` → K01、K02 |
-| `defaultSchedule` | 常態上課時間 `{ weekday: 0–6, start: 'HH:MM', end: 'HH:MM' }` |
+| `schedule[]` | 常態上課時段 `{ weekday: 0–6（0 = 週日）, nth, start: 'HH:MM', end: 'HH:MM' }`，`nth`：0 每週、1–5 每月第 N 個、-1 每月最後一個。例如每月第 1 個週六＋第 3 個週日就是兩個時段 |
 | `teams[]` | 小隊 `{ id, name }`，可以是空陣列（不分小隊） |
 | `addRules[]` | 加分規則 `{ id, label, points, icon, isCheckin }`，每班最多一個 `isCheckin` |
 | `deductRules[]` | 扣分規則 `{ id, label, points, icon }`，`points` 存正數 |
@@ -77,7 +77,7 @@ state
 | 分類 | 操作 |
 |---|---|
 | 班別 | `class.create`、`class.update`、`class.delete`、`class.restore` |
-| 課次 | `session.save`、`session.ensure`、`session.delete` |
+| 課次 | `session.save`、`session.ensure`、`session.generate`（依常態時間產生課表）、`session.delete` |
 | 服務人員 | `staff.create`、`staff.update`、`staff.delete`、`staff.restore` |
 | 學員 | `student.create`、`student.import`（批次）、`student.update`、`student.delete`、`student.restore` |
 | 積分 | `points.checkin`、`points.award`、`points.batch`、`points.redeem`、`points.adjust`、`log.reverse` |

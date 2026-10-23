@@ -224,15 +224,72 @@
 
   // ---------- 正規化 ----------
 
+  /**
+   * 常態上課時間：多個時段，例如「每月第 1 個週六 09:30–11:30」＋「每月第 3 個週日 14:00–16:00」。
+   *   [{ weekday: 0–6（0 = 週日）, nth: 0 每週｜1–5 每月第 N 個｜-1 每月最後一個, start, end }]
+   * 也接受舊格式 { weekday, start, end }（視為每週）。
+   */
   function normalizeSchedule(sch) {
-    sch = sch || {};
-    const weekday = sch.weekday === undefined || sch.weekday === null || sch.weekday === ''
-      ? null
-      : int(sch.weekday, '上課星期', { min: 0, max: 6 });
-    const start = time(sch.start, '常態開始時間');
-    const end = time(sch.end, '常態結束時間');
-    if (start && end && start >= end) fail('INVALID_INPUT', '常態上課的結束時間需晚於開始時間');
-    return { weekday: weekday, start: start, end: end };
+    if (!sch) return [];
+    if (!Array.isArray(sch)) {
+      if (sch.weekday === undefined || sch.weekday === null || sch.weekday === '') return [];
+      sch = [{ weekday: sch.weekday, nth: 0, start: sch.start, end: sch.end }];
+    }
+    if (sch.length > 10) fail('INVALID_INPUT', '常態上課時段最多 10 個');
+    return sch.map(function (slot) {
+      const out = {
+        weekday: int(slot.weekday, '上課星期', { min: 0, max: 6 }),
+        nth: int(slot.nth || 0, '第幾週', { min: -1, max: 5 }),
+        start: time(slot.start, '常態開始時間'),
+        end: time(slot.end, '常態結束時間')
+      };
+      if (out.start && out.end && out.start >= out.end) fail('INVALID_INPUT', '常態上課的結束時間需晚於開始時間');
+      return out;
+    });
+  }
+
+  /** 某個日期是否符合常態時段 */
+  function slotMatches(slot, dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (d.getDay() !== slot.weekday) return false;
+    const day = d.getDate();
+    if (!slot.nth) return true;
+    if (slot.nth === -1) {
+      const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      return day + 7 > daysInMonth;
+    }
+    return Math.ceil(day / 7) === slot.nth;
+  }
+
+  /** 班別在某天的常態時段（不是上課日回傳 null） */
+  function scheduleSlotFor(cls, dateStr) {
+    return (cls.schedule || []).find(function (slot) { return slotMatches(slot, dateStr); }) || null;
+  }
+
+  function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return localIso(d).slice(0, 10);
+  }
+
+  /** 從 fromDate（含）開始，符合常態時段的日期，最多 count 個、最遠約一年 */
+  function upcomingDates(cls, fromDate, count) {
+    const out = [];
+    if (!cls.schedule || !cls.schedule.length) return out;
+    for (let i = 0; i < 400 && out.length < count; i++) {
+      const d = addDays(fromDate, i);
+      if (scheduleSlotFor(cls, d)) out.push(d);
+    }
+    return out;
+  }
+
+  /** 舊資料升級：v3 早期版本的 defaultSchedule 改為 schedule 陣列 */
+  function upgrade(state) {
+    (state.classes || []).forEach(function (c) {
+      if (!Array.isArray(c.schedule)) c.schedule = normalizeSchedule(c.defaultSchedule);
+      delete c.defaultSchedule;
+    });
+    return state;
   }
 
   function normalizeRules(rules, kind, ctx) {
@@ -355,7 +412,7 @@
       icon: text(p.icon, '圖示', { max: 8 }),
       themeColor: text(p.themeColor, '主題色', { max: 20 }) || 'amber',
       idPrefix: text(p.idPrefix, '學號前綴', { required: true, max: 3 }).toUpperCase(),
-      defaultSchedule: normalizeSchedule(p.defaultSchedule),
+      schedule: normalizeSchedule(p.schedule || p.defaultSchedule),
       teams: normalizeTeams(p.teams, ctx),
       addRules: normalizeRules(p.addRules, 'add', ctx),
       deductRules: normalizeRules(p.deductRules, 'deduct', ctx),
@@ -380,7 +437,7 @@
       next.idPrefix = text(patch.idPrefix, '學號前綴', { required: true, max: 3 }).toUpperCase();
       if (!PREFIX_RE.test(next.idPrefix)) fail('INVALID_INPUT', '學號前綴只能是 1–3 個英文字母或數字');
     }
-    if ('defaultSchedule' in patch) next.defaultSchedule = normalizeSchedule(patch.defaultSchedule);
+    if ('schedule' in patch) next.schedule = normalizeSchedule(patch.schedule);
     if ('teams' in patch) {
       next.teams = normalizeTeams(patch.teams, ctx);
       const kept = new Set(next.teams.map(function (t) { return t.id; }));
@@ -477,9 +534,30 @@
     const d = date(p.date, '上課日期');
     const found = findSession(state, cls.id, d);
     if (found) return { id: found.id, created: false };
-    const sch = cls.defaultSchedule || {};
-    const r = OPS['session.save'](state, { classId: cls.id, date: d, start: sch.start, end: sch.end }, ctx);
+    // 依當天符合的常態時段帶入時間；不是常態上課日（例如補課）就帶第一個時段的時間
+    const slot = scheduleSlotFor(cls, d) || (cls.schedule || [])[0] || {};
+    const r = OPS['session.save'](state, { classId: cls.id, date: d, start: slot.start, end: slot.end }, ctx);
     return { id: r.id, created: true };
+  };
+
+  /** 依常態時間產生一段期間的課次（已有課次的日期略過） */
+  OPS['session.generate'] = function (state, p, ctx) {
+    const cls = mustFind(state.classes, p.classId, '班別');
+    if (!cls.schedule || !cls.schedule.length) fail('INVALID_INPUT', `「${cls.name}」還沒有設定常態上課時間`);
+    const from = date(p.from, '開始日期');
+    const to = date(p.to, '結束日期');
+    if (from > to) fail('INVALID_INPUT', '結束日期需晚於開始日期');
+    const result = { created: 0, skipped: 0, dates: [] };
+    for (let d = from, i = 0; d <= to && i < 400; d = addDays(d, 1), i++) {
+      const slot = scheduleSlotFor(cls, d);
+      if (!slot) continue;
+      if (findSession(state, cls.id, d)) { result.skipped++; continue; }
+      if (result.created >= 60) fail('INVALID_INPUT', '一次最多產生 60 堂課，請縮短期間');
+      OPS['session.save'](state, { classId: cls.id, date: d, start: slot.start, end: slot.end }, ctx);
+      result.created++;
+      result.dates.push(d);
+    }
+    return result;
   };
 
   OPS['session.delete'] = function (state, p, ctx) {
@@ -914,6 +992,11 @@
     computeStaffDuty: computeStaffDuty,
     isCheckedIn: isCheckedIn,
     findSession: findSession,
+    slotMatches: slotMatches,
+    scheduleSlotFor: scheduleSlotFor,
+    upcomingDates: upcomingDates,
+    addDays: addDays,
+    upgrade: upgrade,
     nextStudentId: nextStudentId,
     localIso: localIso
   };

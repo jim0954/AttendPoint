@@ -52,6 +52,18 @@
   };
   App.timeRange = function (s) { return s && s.start && s.end ? s.start + '–' + s.end : ''; };
 
+  // 常態上課時段：nth 0 每週、1–5 每月第 N 個、-1 每月最後一個
+  App.NTH_OPTIONS = [[0, '每週'], [1, '每月第 1 個'], [2, '每月第 2 個'], [3, '每月第 3 個'], [4, '每月第 4 個'], [5, '每月第 5 個'], [-1, '每月最後一個']];
+  App.slotText = function (slot) {
+    const nth = App.NTH_OPTIONS.find(function (o) { return o[0] === (slot.nth || 0); });
+    const time = App.timeRange(slot);
+    return (slot.nth ? nth[1] + '週' : '每週') + WEEKDAYS[slot.weekday] + (time ? ' ' + time : '');
+  };
+  App.scheduleText = function (cls) {
+    const slots = (cls && cls.schedule) || [];
+    return slots.length ? slots.map(App.slotText).join('、') : '未設定常態時間';
+  };
+
   // ---------- 提示 ----------
   App.toast = function (message, tone) {
     const root = App.$('#toastRoot');

@@ -231,18 +231,17 @@
     bar.hidden = !cls;
     if (!cls) return;
     const session = App.session();
-    const sch = cls.defaultSchedule || {};
-    const regular = sch.weekday !== null && sch.weekday !== undefined
-      ? App.weekdayName(sch.weekday) + ' ' + (sch.start && sch.end ? sch.start + '–' + sch.end : '')
-      : '';
+    const regular = cls.schedule && cls.schedule.length ? App.scheduleText(cls) : '';
+    const next = AttendStore.upcomingDates(cls, App.today(), 1)[0];
+    const offDay = !session && regular && !AttendStore.scheduleSlotFor(cls, App.s.date);
     App.setHtml(bar, App.html`
       <label class="faint" for="dateInput">上課日期</label>
       <input id="dateInput" class="input" type="date" value="${App.s.date}" data-change="set-date" />
       <div class="session-info">
         ${session
           ? App.html`<b>${App.dateLabel(session.date)}</b> ${App.timeRange(session)} ${session.topic ? App.html`・${session.topic}` : ''}`
-          : App.html`<span class="faint">這天還沒有課次，點名時會自動建立</span>`}
-        ${regular ? App.html`<div class="faint">常態：${regular}</div>` : ''}
+          : App.html`<span class="faint">${offDay ? '這天不是常態上課日；' : '這天還沒有課次，'}點名時會自動建立</span>`}
+        ${regular ? App.html`<div class="faint">常態：${regular}${next ? App.html`・下次上課 ${App.dateLabel(next)}` : ''}</div>` : ''}
       </div>
       ${App.isStaff() ? App.html`<button type="button" class="btn btn-sm" data-action="edit-session">🗓️ ${session ? '編輯課次' : '建立課次'}</button>` : ''}`);
   }

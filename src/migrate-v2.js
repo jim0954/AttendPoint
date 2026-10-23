@@ -120,7 +120,7 @@
         icon: def.icon,
         themeColor: def.themeColor,
         idPrefix: def.idPrefix,
-        defaultSchedule: { weekday: null, start: '', end: '' },
+        schedule: [],
         teams: [],
         addRules: def.addRules.map(function (r) { return Object.assign({ isCheckin: false }, r); }),
         deductRules: def.deductRules.map(function (r) { return Object.assign({}, r); }),
@@ -341,7 +341,7 @@
   function loadAny(raw, ctxOverrides) {
     const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (data && data.schemaVersion === Store.SCHEMA_VERSION) {
-      return { state: data, migratedFrom: null, report: null };
+      return { state: Store.upgrade(data), migratedFrom: null, report: null };
     }
     if (isV2(data)) {
       const r = migrateV2(data, ctxOverrides);

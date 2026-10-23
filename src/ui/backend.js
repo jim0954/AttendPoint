@@ -157,7 +157,8 @@
   };
 
   LocalBackend.prototype.readState = function () {
-    return readJson(KEYS.data, null) || AttendStore.emptyState();
+    const data = readJson(KEYS.data, null);
+    return data ? AttendStore.upgrade(data) : AttendStore.emptyState();
   };
 
   LocalBackend.prototype.run = function (fn) {

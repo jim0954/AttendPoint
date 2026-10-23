@@ -35,11 +35,7 @@
 
   // ---------- 班別 ----------
 
-  function scheduleText(c) {
-    const sch = c.defaultSchedule || {};
-    if (sch.weekday === null || sch.weekday === undefined) return '未設定常態時間';
-    return App.weekdayName(sch.weekday) + ' ' + (sch.start && sch.end ? sch.start + '–' + sch.end : '');
-  }
+  const scheduleText = App.scheduleText;
 
   function renderClasses() {
     const classes = App.classes();
@@ -76,6 +72,22 @@
       </div>`;
   }
 
+  function slotRow(slot) {
+    slot = slot || { weekday: 6, nth: 0, start: '', end: '' };
+    return html`
+      <div class="row" data-row="slot">
+        <select class="select" data-f="nth" style="width:auto">
+          ${App.NTH_OPTIONS.map(function (o) { return html`<option value="${o[0]}" ${(slot.nth || 0) === o[0] ? 'selected' : ''}>${o[1]}</option>`; })}
+        </select>
+        <select class="select" data-f="weekday" style="width:auto">
+          ${[1, 2, 3, 4, 5, 6, 0].map(function (d) { return html`<option value="${d}" ${slot.weekday === d ? 'selected' : ''}>${App.weekdayName(d)}</option>`; })}
+        </select>
+        <input class="input" data-f="start" type="time" value="${slot.start}" style="width:auto" /> –
+        <input class="input" data-f="end" type="time" value="${slot.end}" style="width:auto" />
+        <button type="button" class="btn btn-sm" data-remove>✕</button>
+      </div>`;
+  }
+
   function ruleRow(kind, r, removable) {
     return html`
       <div class="row" data-row="${kind}" data-id="${r ? r.id : ''}">
@@ -90,6 +102,9 @@
   function collectRows(m, kind) {
     return App.$$('[data-row="' + kind + '"]', m).map(function (row) {
       const get = function (f) { const el = row.querySelector('[data-f="' + f + '"]'); return el ? (el.type === 'checkbox' ? el.checked : el.value) : undefined; };
+      if (kind === 'slot') {
+        return { weekday: Number(get('weekday')), nth: Number(get('nth')), start: get('start'), end: get('end') };
+      }
       const out = row.dataset.id ? { id: row.dataset.id } : {};
       if (kind === 'team') out.name = get('name');
       else {
@@ -99,12 +114,11 @@
         if (kind === 'add') out.isCheckin = get('isCheckin');
       }
       return out;
-    }).filter(function (x) { return kind === 'team' ? x.name.trim() : x.label.trim(); });
+    }).filter(function (x) { return kind === 'slot' || (kind === 'team' ? x.name.trim() : x.label.trim()); });
   }
 
   function openClassEditor(cls) {
     const owner = App.isOwner();
-    const sch = (cls && cls.defaultSchedule) || {};
     App.modal({
       title: cls ? '編輯班別：' + cls.name : '新增班別',
       body: html`
@@ -116,15 +130,12 @@
             <div class="field"><label>主題色</label>
               <select class="select" name="themeColor">${THEMES.map(function (t) { return html`<option value="${t[0]}" ${cls && cls.themeColor === t[0] ? 'selected' : ''}>${t[1]}</option>`; })}</select>
             </div>
-            <div class="field"><label>常態上課日</label>
-              <select class="select" name="weekday">
-                <option value="">未設定</option>
-                ${[1, 2, 3, 4, 5, 6, 0].map(function (d) { return html`<option value="${d}" ${sch.weekday === d ? 'selected' : ''}>${App.weekdayName(d)}</option>`; })}
-              </select>
-            </div>
-            <div class="field"><label>常態時間</label>
-              <div class="row"><input class="input" name="start" type="time" value="${sch.start || ''}" style="width:auto" /> – <input class="input" name="end" type="time" value="${sch.end || ''}" style="width:auto" /></div>
-            </div>
+          </div>
+
+          <div class="stack" data-list="slot">
+            <div class="spread"><b>常態上課時間（選填）</b><button type="button" class="btn btn-sm" data-add="slot">＋ 時段</button></div>
+            <span class="hint">可以設定多個時段，例如「每月第 1 個 週六」加上「每月第 3 個 週日」，各自有不同時間。</span>
+            ${((cls && cls.schedule) || []).map(slotRow)}
           </div>
 
           <div class="stack" data-list="team">
@@ -152,7 +163,7 @@
           if (add) {
             const kind = add.dataset.add;
             const tpl = document.createElement('div');
-            tpl.innerHTML = String(kind === 'team' ? teamRow(null, true) : ruleRow(kind, null, true));
+            tpl.innerHTML = String(kind === 'slot' ? slotRow(null) : kind === 'team' ? teamRow(null, true) : ruleRow(kind, null, true));
             m.querySelector('[data-list="' + kind + '"]').appendChild(tpl.firstElementChild);
           }
           const rm = e.target.closest('[data-remove]');
@@ -166,7 +177,7 @@
             idPrefix: f.idPrefix,
             icon: f.icon,
             themeColor: f.themeColor,
-            defaultSchedule: { weekday: f.weekday === '' ? null : Number(f.weekday), start: f.start, end: f.end },
+            schedule: collectRows(m, 'slot'),
             teams: collectRows(m, 'team'),
             addRules: collectRows(m, 'add'),
             deductRules: collectRows(m, 'deduct')
@@ -252,7 +263,8 @@
     return html`
       <div class="toolbar">
         <button type="button" class="btn btn-primary" data-action="new-session">＋ 新增課次</button>
-        <span class="faint">${cls.name}・常態 ${scheduleText(cls)}</span>
+        ${cls.schedule && cls.schedule.length ? html`<button type="button" class="btn" data-action="generate-sessions">📅 依常態時間產生課表</button>` : ''}
+        <span class="faint">${cls.name}・常態：${scheduleText(cls)}</span>
       </div>
       <div class="card list">
         ${sessions.map(function (s) {
@@ -271,23 +283,23 @@
       </div>`;
   }
 
-  /** 新課次的預設日期：目前日期；已經有課次就往後找下一個常態上課日（或下一週） */
+  /** 新課次的預設日期：從目前日期起，下一個還沒有課次的常態上課日（沒有常態時間就每 7 天找） */
   function nextFreeDate(cls) {
-    const sch = cls.defaultSchedule || {};
-    let d = new Date(App.s.date + 'T00:00:00');
+    const free = function (d) { return !AttendStore.findSession(App.s.data, cls.id, d); };
+    const found = AttendStore.upcomingDates(cls, App.s.date, 60).find(free);
+    if (found) return found;
     for (let i = 0; i < 60; i++) {
-      const iso = AttendStore.localIso(d).slice(0, 10);
-      const okDay = sch.weekday === null || sch.weekday === undefined ? i % 7 === 0 : d.getDay() === sch.weekday;
-      if (okDay && !AttendStore.findSession(App.s.data, cls.id, iso)) return iso;
-      d.setDate(d.getDate() + 1);
+      const d = AttendStore.addDays(App.s.date, i * 7);
+      if (free(d)) return d;
     }
     return App.s.date;
   }
 
   function openSessionEditor(session, date) {
     const cls = App.classById(session ? session.classId : App.s.classId);
-    const sch = cls.defaultSchedule || {};
-    const s = session || { date: date || nextFreeDate(cls), start: sch.start, end: sch.end, topic: '', dutyStaffIds: [] };
+    const day = date || nextFreeDate(cls);
+    const slot = AttendStore.scheduleSlotFor(cls, day) || (cls.schedule || [])[0] || {};
+    const s = session || { date: day, start: slot.start, end: slot.end, topic: '', dutyStaffIds: [] };
     const staff = App.staffList().slice().sort(function (a, b) {
       const ai = a.classIds.indexOf(cls.id) !== -1 ? 0 : 1;
       const bi = b.classIds.indexOf(cls.id) !== -1 ? 0 : 1;
@@ -331,6 +343,43 @@
   }
 
   Object.assign(App.actions, {
+    'generate-sessions': function () {
+      const cls = App.cls();
+      const from = App.today();
+      const to = AttendStore.addDays(from, 90);
+      App.modal({
+        title: '依常態時間產生課表・' + cls.name,
+        body: html`
+          <p class="faint" style="margin:0">常態：${App.scheduleText(cls)}。已經有課次的日期會略過，產生後可以再個別修改主題與執勤。</p>
+          <form class="form-grid">
+            <div class="field"><label>從</label><input class="input" name="from" type="date" value="${from}" /></div>
+            <div class="field"><label>到</label><input class="input" name="to" type="date" value="${to}" /></div>
+            <div class="field full" data-preview></div>
+            <button type="submit" class="btn btn-primary full">產生課次</button>
+          </form>`,
+        onMount: function (m, close) {
+          const form = m.querySelector('form');
+          function preview() {
+            const f = App.formData(form);
+            const dates = f.from && f.to ? AttendStore.upcomingDates(cls, f.from, 100).filter(function (d) { return d <= f.to; }) : [];
+            App.setHtml(m.querySelector('[data-preview]'), dates.length
+              ? html`<span class="hint">共 ${dates.length} 個上課日：${dates.slice(0, 12).map(App.dateLabel).join('、')}${dates.length > 12 ? '…' : ''}</span>`
+              : html`<span class="hint">這段期間沒有符合的上課日</span>`);
+          }
+          form.addEventListener('change', preview);
+          preview();
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const f = App.formData(form);
+            App.run({ type: 'session.generate', classId: cls.id, from: f.from, to: f.to }).then(function (res) {
+              close();
+              const r = res.result;
+              App.toast(`📅 已產生 ${r.created} 堂課${r.skipped ? `（略過已存在的 ${r.skipped} 堂）` : ''}`, 'ok');
+            });
+          });
+        }
+      });
+    },
     'new-session': function () { openSessionEditor(null); },
     'edit-session': function (el) {
       // 從課次列點選：編輯目前日期的課次，沒有就以目前日期建立

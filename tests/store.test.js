@@ -26,7 +26,7 @@ function setup() {
     type: 'class.create',
     name: '兒童讀經班',
     idPrefix: 'k',
-    defaultSchedule: { weekday: 6, start: '09:30', end: '11:30' },
+    schedule: [{ weekday: 6, nth: 0, start: '09:30', end: '11:30' }],
     teams: ['孝順隊', '仁愛隊'],
     addRules: [
       { label: '準時報到', points: 10, isCheckin: true },
@@ -286,4 +286,44 @@ test('小隊為選填：沒有小隊的班別、不分小隊的學員、全班�
   // 轉班時可以不指定小隊
   t.run({ type: 'class.delete', id: y.id, moveStudentsTo: { classId: t.classId } });
   assert.equal(t.state.students.find((x) => x.id === s2.id).classId, t.classId);
+});
+
+test('常態時間：每月第一個週六＋第三個週日（各自時間）', () => {
+  const t = setup();
+  const c = t.run({
+    type: 'class.create', name: '經典班', idPrefix: 'J',
+    schedule: [
+      { weekday: 6, nth: 1, start: '09:30', end: '11:30' },
+      { weekday: 0, nth: 3, start: '14:00', end: '16:00' }
+    ]
+  });
+  const cls = t.state.classes.find((x) => x.id === c.id);
+  // 2026 年 10 月：第一個週六 10/3、第三個週日 10/18
+  assert.deepEqual(Store.upcomingDates(cls, '2026-10-01', 4), ['2026-10-03', '2026-10-18', '2026-11-07', '2026-11-15']);
+  assert.equal(Store.scheduleSlotFor(cls, '2026-10-10'), null);
+  // 依常態時段帶入時間
+  const s1 = t.run({ type: 'session.ensure', classId: c.id, date: '2026-10-18' });
+  assert.equal(t.state.sessions.find((x) => x.id === s1.id).start, '14:00');
+  // 產生課表：已有 10/18 會略過
+  const g = t.run({ type: 'session.generate', classId: c.id, from: '2026-10-01', to: '2026-12-31' });
+  assert.deepEqual(g.dates, ['2026-10-03', '2026-11-07', '2026-11-15', '2026-12-05', '2026-12-20']);
+  assert.equal(g.skipped, 1);
+  expectError(() => t.run({ type: 'session.generate', classId: c.id, from: '2026-12-31', to: '2026-10-01' }), 'INVALID_INPUT');
+});
+
+test('常態時間：每月最後一個週日', () => {
+  const slot = { weekday: 0, nth: -1 };
+  assert.equal(Store.slotMatches(slot, '2026-10-25'), true);
+  assert.equal(Store.slotMatches(slot, '2026-10-18'), false);
+  assert.equal(Store.slotMatches(slot, '2026-11-29'), true);
+});
+
+test('舊格式 defaultSchedule 自動升級為 schedule', () => {
+  const state = Store.emptyState();
+  state.classes.push({ id: 'c1', name: 'x', defaultSchedule: { weekday: 6, start: '09:00', end: '10:00' } });
+  state.classes.push({ id: 'c2', name: 'y', defaultSchedule: { weekday: null, start: '', end: '' } });
+  Store.upgrade(state);
+  assert.deepEqual(state.classes[0].schedule, [{ weekday: 6, nth: 0, start: '09:00', end: '10:00' }]);
+  assert.deepEqual(state.classes[1].schedule, []);
+  assert.equal('defaultSchedule' in state.classes[0], false);
 });
