@@ -29,7 +29,7 @@
                   <tr>
                     <td class="faint">${s.id}</td>
                     <td><b>${s.name}</b></td>
-                    <td>${App.teamName(s)}</td>
+                    <td>${App.teamName(s) || html`<span class="faint">—</span>`}</td>
                     <td class="num">${t.honor}</td>
                     <td class="num">${t.balance}</td>
                     <td class="num">${t.sessionIds.length}</td>
@@ -48,9 +48,9 @@
   };
 
   function teamOptions(cls, selected) {
-    return cls.teams.map(function (t) {
+    return [html`<option value="" ${selected ? '' : 'selected'}>（不分小隊）</option>`].concat(cls.teams.map(function (t) {
       return html`<option value="${t.id}" ${t.id === selected ? 'selected' : ''}>${t.name}</option>`;
-    });
+    }));
   }
 
   Object.assign(App.actions, {
@@ -137,7 +137,7 @@
             ・<b>姓名</b><br>
             ・<b>小隊, 姓名</b><br>
             ・<b>班別, 小隊, 姓名, 學號, 備註</b>（學號、備註可省略）<br>
-            沒寫班別的學員會加入「${cls.name}」；不存在的小隊會自動建立；同班同名的學員只會更新小隊與備註。
+            沒寫班別的學員會加入「${cls.name}」；小隊可以留空（不分小隊），不存在的小隊會自動建立；同班同名的學員只會更新小隊與備註。
           </div>
           <div class="field">
             <label>選擇 CSV 檔</label>
@@ -195,8 +195,8 @@
     'download-template': function () {
       App.download('學員名冊範本.csv', App.toCsv([
         ['班別', '小隊', '姓名', '學號', '備註'],
-        [App.cls().name, App.cls().teams[0].name, '王小明', '', '家長：王先生'],
-        [App.cls().name, App.cls().teams[0].name, '陳小華', '', '']
+        [App.cls().name, App.cls().teams.length ? App.cls().teams[0].name : '', '王小明', '', '家長：王先生'],
+        [App.cls().name, '', '陳小華', '', '']
       ]));
     },
 

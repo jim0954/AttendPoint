@@ -57,7 +57,7 @@
                 </div>
               </div>
               <div class="faint">🕘 ${scheduleText(c)}・👥 ${App.students(c.id).length} 位學員</div>
-              <div class="row">${c.teams.map(function (t) { return html`<span class="chip">${t.name}</span>`; })}</div>
+              <div class="row">${c.teams.length ? c.teams.map(function (t) { return html`<span class="chip">${t.name}</span>`; }) : html`<span class="faint">不分小隊</span>`}</div>
               <div class="row">
                 ${c.addRules.map(function (r) { return html`<span class="chip chip-ok">${r.icon} ${r.label} +${r.points}${r.isCheckin ? '（報到）' : ''}</span>`; })}
                 ${c.deductRules.map(function (r) { return html`<span class="chip chip-warn">${r.icon} ${r.label} −${r.points}</span>`; })}
@@ -128,8 +128,9 @@
           </div>
 
           <div class="stack" data-list="team">
-            <div class="spread"><b>小隊</b><button type="button" class="btn btn-sm" data-add="team">＋ 小隊</button></div>
-            ${(cls ? cls.teams : [{ name: '第一小隊' }]).map(function (t) { return teamRow(t, owner || !cls); })}
+            <div class="spread"><b>小隊（選填）</b><button type="button" class="btn btn-sm" data-add="team">＋ 小隊</button></div>
+            <span class="hint">不需要分小隊的班別，這裡留空即可。</span>
+            ${(cls ? cls.teams : []).map(function (t) { return teamRow(t, owner || !cls); })}
           </div>
 
           <div class="stack" data-list="add">
@@ -203,7 +204,9 @@
             ${others.length ? html`
               <label class="check"><input type="radio" name="mode" value="move" checked /> 轉到其他班別</label>
               <select class="select" name="target">
-                ${others.map(function (c) { return c.teams.map(function (t) { return html`<option value="${c.id}|${t.id}">${c.name}・${t.name}</option>`; }); })}
+                ${others.map(function (c) {
+                  return [html`<option value="${c.id}|">${c.name}（不分小隊）</option>`].concat(c.teams.map(function (t) { return html`<option value="${c.id}|${t.id}">${c.name}・${t.name}</option>`; }));
+                })}
               </select>` : ''}
             <label class="check"><input type="radio" name="mode" value="delete" ${others.length ? '' : 'checked'} /> 學員一併移到回收區</label>
             <button type="submit" class="btn btn-danger">確定刪除班別</button>

@@ -25,7 +25,7 @@
       let lastRank = 0;
 
       return html`
-        <div class="section-title"><h2>🚩 小隊競賽（平均榮譽分）</h2></div>
+        ${teams.length ? html`<div class="section-title"><h2>🚩 小隊競賽（平均榮譽分）</h2></div>
         <div class="card card-pad stack">
           ${teams.map(function (t, i) {
             return html`
@@ -34,7 +34,7 @@
                 <div class="bar"><i style="width:${Math.round((t.avg / maxAvg) * 100)}%"></i></div>
               </div>`;
           })}
-        </div>
+        </div>` : ''}
 
         <div class="section-title"><h2>🏅 個人榮譽榜</h2><span class="faint">榮譽總分不因兌換而減少</span></div>
         <div class="card list">

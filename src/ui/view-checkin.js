@@ -35,7 +35,7 @@
 
   function filtered(cls, session) {
     return App.students(cls.id).filter(function (s) {
-      if (App.s.teamFilter !== 'all' && s.teamId !== App.s.teamFilter) return false;
+      if (App.s.teamFilter !== 'all' && cls.teams.length && s.teamId !== App.s.teamFilter) return false;
       if (App.s.statusFilter !== 'all') {
         const checked = !!session && AttendStore.isCheckedIn(App.s.data, s.id, session.id);
         if ((App.s.statusFilter === 'in') !== checked) return false;
@@ -53,7 +53,7 @@
         <div class="spread">
           <div class="grow">
             <div class="name" data-action="open-student" data-id="${s.id}">${s.name}</div>
-            <div class="row"><span class="id">${s.id}</span><span class="chip chip-theme">${App.teamName(s)}</span></div>
+            <div class="row"><span class="id">${s.id}</span>${App.teamName(s) ? html`<span class="chip chip-theme">${App.teamName(s)}</span>` : ''}</div>
           </div>
           <span class="chip ${rank.cls}">${rank.title}</span>
         </div>
@@ -100,15 +100,15 @@
 
         <div class="toolbar">
           <input class="input" type="search" placeholder="🔍 搜尋姓名或學號" value="${App.s.search}" data-input="search" />
-          ${App.isStaff() ? html`<button type="button" class="btn" data-action="open-batch">👥 小隊／全體加減分</button>` : ''}
+          ${App.isStaff() ? html`<button type="button" class="btn" data-action="open-batch">👥 ${cls.teams.length ? '小隊／全體' : '全體'}加減分</button>` : ''}
         </div>
         <div class="toolbar">
-          <div class="pills">
+          ${cls.teams.length ? html`<div class="pills">
             <button type="button" class="pill ${App.s.teamFilter === 'all' ? 'active' : ''}" data-action="team-filter" data-id="all">全部小隊</button>
             ${cls.teams.map(function (t) {
               return html`<button type="button" class="pill ${App.s.teamFilter === t.id ? 'active' : ''}" data-action="team-filter" data-id="${t.id}">${t.name}</button>`;
             })}
-          </div>
+          </div>` : ''}
           <div class="pills">
             ${[['all', '全部'], ['in', '已報到'], ['out', '未報到']].map(function (p) {
               return html`<button type="button" class="pill ${App.s.statusFilter === p[0] ? 'active' : ''}" data-action="status-filter" data-id="${p[0]}">${p[1]}</button>`;
@@ -233,7 +233,7 @@
           <div class="spread">
             <div>
               <h3 style="font-size:22px">${s.name}</h3>
-              <div class="row"><span class="faint">${s.id}</span><span class="chip chip-theme">${cls ? cls.name : ''}・${App.teamName(s)}</span><span class="chip ${rank.cls}">${rank.title}</span></div>
+              <div class="row"><span class="faint">${s.id}</span><span class="chip chip-theme">${cls ? cls.name : ''}${App.teamName(s) ? '・' + App.teamName(s) : ''}</span><span class="chip ${rank.cls}">${rank.title}</span></div>
             </div>
           </div>
           <div class="stats" style="margin:0">
@@ -287,13 +287,14 @@
   function openBatch() {
     const cls = App.cls();
     App.modal({
-      title: '小隊／全體加減分',
+      title: cls.teams.length ? '小隊／全體加減分' : '全體加減分',
       body: html`
         <form class="stack">
           <div class="field">
             <label>對象</label>
             <select class="select" name="target">
               <option value="checkedIn">本堂已報到的學員</option>
+              <option value="all">全班學員</option>
               ${cls.teams.map(function (t) { return html`<option value="team:${t.id}">${t.name}</option>`; })}
             </select>
           </div>
@@ -326,7 +327,7 @@
           const points = sign * Math.abs(parseInt(f.points, 10) || 0);
           if (!points) return App.toast('⚠️ 請輸入分數', 'warn');
           const reason = f.reason.trim() || (sign > 0 ? '小隊團體加分' : '小隊團體扣分');
-          const target = f.target === 'checkedIn' ? { checkedIn: true } : { teamId: f.target.slice(5) };
+          const target = f.target === 'checkedIn' ? { checkedIn: true } : f.target === 'all' ? { all: true } : { teamId: f.target.slice(5) };
           App.ensureSession().then(function (sessionId) {
             const p = App.run({ type: 'points.batch', classId: cls.id, sessionId: sessionId, points: points, reason: reason, target: target });
             if (p.accepted) {

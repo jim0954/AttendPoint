@@ -283,6 +283,11 @@
     return team;
   }
 
+  /** 小隊為選填：有指定就檢查是否存在，沒指定就是「不分小隊」（null） */
+  function teamIdOrNull(cls, teamId) {
+    return teamId ? teamOf(cls, teamId).id : null;
+  }
+
   function touch(item, ctx) {
     item.updatedAt = ctx.now();
   }
@@ -359,7 +364,6 @@
       deletedAt: null
     };
     if (!PREFIX_RE.test(cls.idPrefix)) fail('INVALID_INPUT', '學號前綴只能是 1–3 個英文字母或數字');
-    if (cls.teams.length === 0) fail('INVALID_INPUT', '每個班別至少要有一個小隊');
     checkClassUnique(state, cls);
     state.classes.push(cls);
     return { id: cls.id };
@@ -379,7 +383,6 @@
     if ('defaultSchedule' in patch) next.defaultSchedule = normalizeSchedule(patch.defaultSchedule);
     if ('teams' in patch) {
       next.teams = normalizeTeams(patch.teams, ctx);
-      if (next.teams.length === 0) fail('INVALID_INPUT', '每個班別至少要有一個小隊');
       const kept = new Set(next.teams.map(function (t) { return t.id; }));
       cls.teams.forEach(function (t) {
         if (kept.has(t.id)) return;
@@ -397,7 +400,7 @@
 
   /**
    * 刪除班別（移到回收區）。班上若還有學員，需擇一：
-   *   moveStudentsTo: { classId, teamId }  學員轉到其他班
+   *   moveStudentsTo: { classId, teamId? }  學員轉到其他班（teamId 可省略）
    *   deleteStudents: true                 學員一併移到回收區
    */
   OPS['class.delete'] = function (state, p, ctx) {
@@ -407,10 +410,10 @@
       if (p.moveStudentsTo) {
         const target = mustFind(state.classes, p.moveStudentsTo.classId, '目標班別');
         if (target.id === cls.id) fail('INVALID_INPUT', '目標班別不可與要刪除的班別相同');
-        const team = teamOf(target, p.moveStudentsTo.teamId);
+        const teamId = teamIdOrNull(target, p.moveStudentsTo.teamId);
         members.forEach(function (s) {
           s.classId = target.id;
-          s.teamId = team.id;
+          s.teamId = teamId;
           touch(s, ctx);
         });
       } else if (p.deleteStudents) {
@@ -539,7 +542,7 @@
 
   OPS['student.create'] = function (state, p, ctx) {
     const cls = mustFind(state.classes, p.classId, '班別');
-    const team = p.teamId ? teamOf(cls, p.teamId) : cls.teams[0];
+    const teamId = teamIdOrNull(cls, p.teamId);
     let id = text(p.id, '學號', { max: 12 }).toUpperCase();
     if (id) {
       const taken = state.students.some(function (s) { return s.id.toUpperCase() === id; });
@@ -550,7 +553,7 @@
     const student = {
       id: id,
       classId: cls.id,
-      teamId: team.id,
+      teamId: teamId,
       name: text(p.name, '姓名', { required: true, max: 20 }),
       note: text(p.note, '備註', { max: 200 }),
       createdAt: ctx.now(),
@@ -569,11 +572,9 @@
     if ('note' in patch) student.note = text(patch.note, '備註', { max: 200 });
     if ('classId' in patch || 'teamId' in patch) {
       const cls = mustFind(state.classes, patch.classId || student.classId, '班別');
-      if (cls.id !== student.classId && !patch.teamId) {
-        student.teamId = cls.teams[0].id;
-      } else {
-        student.teamId = teamOf(cls, patch.teamId || student.teamId).id;
-      }
+      // 換班時沒指定小隊就是「不分小隊」；同班時沿用原小隊（patch.teamId 為空字串表示取消小隊）
+      const wanted = 'teamId' in patch ? patch.teamId : (cls.id === student.classId ? student.teamId : null);
+      student.teamId = teamIdOrNull(cls, wanted);
       student.classId = cls.id;
     }
     touch(student, ctx);
@@ -619,7 +620,7 @@
 
     function resolveTeam(cls, name) {
       const n = String(name || '').trim();
-      if (!n) return cls.teams[0];
+      if (!n) return null;
       let team = cls.teams.find(function (t) { return t.name === n; });
       if (!team) {
         if (n.length > 20) fail('INVALID_INPUT', `小隊名稱「${n}」太長`);
@@ -645,7 +646,7 @@
       });
       if (existing) {
         existing.name = name;
-        existing.teamId = team.id;
+        if (team) existing.teamId = team.id;
         if (note) existing.note = note;
         touch(existing, ctx);
         result.updated++;
@@ -658,7 +659,7 @@
       state.students.push({
         id: id || nextStudentId(state, cls.id),
         classId: cls.id,
-        teamId: team.id,
+        teamId: team ? team.id : null,
         name: name,
         note: note,
         createdAt: ctx.now(),
@@ -725,7 +726,7 @@
 
   /**
    * 小隊或全體加減分。
-   *   target: { teamId } 指定小隊；{ checkedIn: true } 本堂已報到的學員（需 sessionId）
+   *   target: { all: true } 全班；{ teamId } 指定小隊；{ checkedIn: true } 本堂已報到的學員（需 sessionId）
    */
   OPS['points.batch'] = function (state, p, ctx) {
     const cls = mustFind(state.classes, p.classId, '班別');
@@ -741,7 +742,7 @@
     } else if (target.checkedIn) {
       if (!session) fail('INVALID_INPUT', '選擇「本堂已報到」時需指定課次');
       members = members.filter(function (s) { return isCheckedIn(state, s.id, session.id); });
-    } else {
+    } else if (!target.all) {
       fail('INVALID_INPUT', '請選擇加減分對象');
     }
     if (members.length === 0) fail('NO_MATCH', '找不到符合條件的學員');

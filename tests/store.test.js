@@ -36,7 +36,7 @@ function setup() {
   });
   const c = () => state.classes.find((x) => x.id === cls.id);
   const session = run({ type: 'session.ensure', classId: cls.id, date: '2026-10-24' });
-  const a = run({ type: 'student.create', classId: cls.id, name: '範例甲' });
+  const a = run({ type: 'student.create', classId: cls.id, name: '範例甲', teamId: c().teams[0].id });
   const b = run({ type: 'student.create', classId: cls.id, name: '範例乙', teamId: c().teams[1].id });
   const gift = run({ type: 'gift.create', name: '文具組', cost: 20 });
   return {
@@ -175,17 +175,17 @@ test('班別名稱與學號前綴不可重複', () => {
   const t = setup();
   expectError(() => t.run({ type: 'class.create', name: '兒童讀經班', idPrefix: 'Z', teams: ['A'] }), 'DUPLICATE');
   expectError(() => t.run({ type: 'class.create', name: '青少年班', idPrefix: 'K', teams: ['A'] }), 'DUPLICATE');
-  expectError(() => t.run({ type: 'class.create', name: '青少年班', idPrefix: 'Y', teams: [] }), 'INVALID_INPUT');
+  expectError(() => t.run({ type: 'class.create', name: '青少年班', idPrefix: 'Y!', teams: [] }), 'INVALID_INPUT');
 });
 
-test('升班：換班時自動分到新班第一個小隊，學號與積分保留', () => {
+test('升班：換班時沒指定小隊就是不分小隊，學號與積分保留', () => {
   const t = setup();
   t.run({ type: 'points.award', studentId: t.a, points: 30, reason: '背經' });
   const y = t.run({ type: 'class.create', name: '青少年班', idPrefix: 'Y', teams: ['慈悲組', '精進組'] });
   t.run({ type: 'student.update', id: t.a, patch: { classId: y.id } });
   const s = t.state.students.find((x) => x.id === t.a);
   assert.equal(s.classId, y.id);
-  assert.equal(s.teamId, t.state.classes.find((x) => x.id === y.id).teams[0].id);
+  assert.equal(s.teamId, null);
   assert.equal(Store.studentTotals(t.state, t.a).honor, 30);
   // 新班新生的學號用新班前綴
   assert.equal(t.run({ type: 'student.create', classId: y.id, name: '範例丙' }).id, 'Y02');
@@ -267,4 +267,23 @@ test('批次匯入：自動學號、自動新增小隊、同名更新、對應�
   assert.equal(t.state.students.find((s) => s.name === '範例丙').id, 'K03');
   assert.equal(t.state.students.find((s) => s.name === '範例丁').classId, y.id);
   assert.equal(t.state.students.find((s) => s.name === '範例戊').id, 'Y09');
+});
+
+test('小隊為選填：沒有小隊的班別、不分小隊的學員、全班加分', () => {
+  const t = setup();
+  const y = t.run({ type: 'class.create', name: '成人班', idPrefix: 'A' });
+  assert.deepEqual(t.state.classes.find((x) => x.id === y.id).teams, []);
+  const s1 = t.run({ type: 'student.create', classId: y.id, name: '範例庚' });
+  const s2 = t.run({ type: 'student.create', classId: y.id, name: '範例辛' });
+  assert.equal(t.state.students.find((x) => x.id === s1.id).teamId, null);
+  assert.equal(t.run({ type: 'points.batch', classId: y.id, points: 5, reason: '全班表現好', target: { all: true } }).count, 2);
+  // 已有小隊的學員可以改成不分小隊
+  t.run({ type: 'student.update', id: t.a, patch: { teamId: '' } });
+  assert.equal(t.state.students.find((x) => x.id === t.a).teamId, null);
+  // 匯入沒寫小隊的學員也是不分小隊
+  t.run({ type: 'student.import', defaultClassId: y.id, rows: [{ name: '範例壬' }] });
+  assert.equal(t.state.students.find((x) => x.name === '範例壬').teamId, null);
+  // 轉班時可以不指定小隊
+  t.run({ type: 'class.delete', id: y.id, moveStudentsTo: { classId: t.classId } });
+  assert.equal(t.state.students.find((x) => x.id === s2.id).classId, t.classId);
 });

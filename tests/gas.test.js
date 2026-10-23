@@ -202,7 +202,8 @@ test('匯入 v2 資料：自動移轉並先備份；跨年度結算前自動備�
 
 test('報表工作表：學員總表包含計算後的分數', () => {
   const { g, owner, staff, classId, sheets } = setup();
-  const stu = ok(g.apiApply(staff, { type: 'student.create', classId, name: '王小明' })).result;
+  const teamId = ok(g.apiGetState(owner)).state.classes[0].teams[0].id;
+  const stu = ok(g.apiApply(staff, { type: 'student.create', classId, teamId, name: '王小明' })).result;
   ok(g.apiApply(staff, { type: 'points.award', studentId: stu.id, points: 15, reason: '背經' }));
   assert.deepEqual(ok(g.apiRebuildReports(owner)).sheets, ['學員總表', '流水帳', '服務人員', '課次']);
   const rows = sheets['學員總表'].cells();

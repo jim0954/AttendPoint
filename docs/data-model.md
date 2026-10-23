@@ -33,7 +33,7 @@ state
 | `icon`、`themeColor` | 圖示、主題色 |
 | `idPrefix` | 學號前綴，1–3 碼英數（不可重複），例如 `K` → K01、K02 |
 | `defaultSchedule` | 常態上課時間 `{ weekday: 0–6, start: 'HH:MM', end: 'HH:MM' }` |
-| `teams[]` | 小隊 `{ id, name }` |
+| `teams[]` | 小隊 `{ id, name }`，可以是空陣列（不分小隊） |
 | `addRules[]` | 加分規則 `{ id, label, points, icon, isCheckin }`，每班最多一個 `isCheckin` |
 | `deductRules[]` | 扣分規則 `{ id, label, points, icon }`，`points` 存正數 |
 
@@ -54,7 +54,7 @@ state
 
 ### students 學員
 
-`{ id, classId, teamId, name, note }`。學號 `id` 建立後不可修改（流水帳以學號對應）。
+`{ id, classId, teamId, name, note }`。`teamId` 為 `null` 表示不分小隊。學號 `id` 建立後不可修改（流水帳以學號對應）。
 
 ### gifts 禮品
 
