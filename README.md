@@ -6,6 +6,17 @@
 
 - `AttendPoint.html`：v2 版本（固定兩個班別），直接用瀏覽器開啟即可單機使用。
 - v3 開發中：動態班別、課次、服務人員名冊，以及「擁有者／壇務／訪客」三級權限。
+  - `src/store.js`：v3 資料層（已完成，說明見 [docs/data-model.md](docs/data-model.md)）
+  - `src/migrate-v2.js`：v2 資料自動移轉（已完成）
+  - 介面尚未接上 v3 資料層（階段 3）
+
+## 開發
+
+需要 Node.js 18 以上，不需安裝任何套件：
+
+```bash
+npm test
+```
 
 ## 隱私說明
 
