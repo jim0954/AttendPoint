@@ -1,7 +1,8 @@
 /*
  * AttendPoint：Google Apps Script 後端
  *
- * 同一個 GAS 專案內需包含：store.js、auth.js、migrate-v2.js、Code.js（依此順序載入）。
+ * 同一個 GAS 專案內需包含：store.js、auth.js、migrate-v2.js、Code.js（依此順序載入）與 Index.html。
+ * 請用 npm run build 產生 dist/gas/，再整個資料夾推送（clasp push）或複製。
  *
  * Script Properties（專案設定 → 指令碼屬性）：
  *   OWNER_PIN       擁有者主帳號的 PIN（4–8 位數字，必填）
@@ -24,15 +25,11 @@ const OWNER_ID = 'U-owner';
 
 // ---------- 網頁 ----------
 
+// Index.html 由 npm run build 產生（已內嵌所有前端程式），不使用 GAS 樣板語法
 function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
+  return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('佛堂點名加分系統')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
-function include(name) {
-  return HtmlService.createHtmlOutputFromFile(name).getContent();
 }
 
 function onOpen() {

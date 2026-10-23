@@ -2,23 +2,52 @@
 
 佛堂班程使用的報到、加減分、換禮系統，可以單機離線使用，也可以部署到 Google Apps Script，讓多位服務人員一起使用。
 
-## 目前狀態
+## 功能
 
-- `AttendPoint.html`：v2 版本（固定兩個班別），直接用瀏覽器開啟即可單機使用。
-- v3 開發中：動態班別、課次、服務人員名冊，以及「擁有者／壇務／訪客」三級權限。
-  - `src/store.js`：v3 資料層（已完成，說明見 [docs/data-model.md](docs/data-model.md)）
-  - `src/migrate-v2.js`：v2 資料自動移轉（已完成）
-  - `src/auth.js`：擁有者／壇務／訪客權限（已完成，說明見 [docs/permissions.md](docs/permissions.md)）
-  - `src/Code.js`：Google Apps Script 後端（已完成，部署見 [docs/deploy-gas.md](docs/deploy-gas.md)）
-  - 介面尚未接上 v3 資料層（階段 3）
+- **點名加分**：一鍵報到、依班別規則加扣分、自訂事由、小隊／全體加減分、撤銷紀錄
+- **榮譽榜**：個人榮譽榜、小隊競賽；榮譽總分不因兌換減少
+- **好禮兌換**：禮品目錄管理、以可用點數兌換
+- **學員名冊**：新增、編輯、換隊升班、CSV／Excel／LINE 貼上批次匯入、匯出報表
+- **班務管理**：動態班別、小隊、加扣分項目、常態上課時間、課次與執勤、服務人員護持統計
+- **三級權限**：訪客（唯讀、名字遮蔽）／壇務（不能刪除）／擁有者（全部），由後端檢查
+- **兩種用法**：單機版（一個 HTML 檔，資料存在瀏覽器）或部署到 Google Apps Script 多人共用
 
-## 開發
+## 使用方式
 
 需要 Node.js 18 以上，不需安裝任何套件：
 
 ```bash
+npm run build
+```
+
+- 單機版：用瀏覽器開啟 `dist/AttendPoint.html`
+- 雲端版：依照 [docs/deploy-gas.md](docs/deploy-gas.md) 部署 `dist/gas/`
+
+## 文件
+
+- [資料結構](docs/data-model.md)
+- [權限與帳號](docs/permissions.md)
+- [部署到 Google Apps Script](docs/deploy-gas.md)
+
+## 開發
+
+```bash
 npm test
 ```
+
+```bash
+npm run gas-sim
+```
+
+| 路徑 | 說明 |
+|---|---|
+| `src/store.js` | 資料層（前後端共用） |
+| `src/auth.js` | 權限規則（前後端共用） |
+| `src/migrate-v2.js` | v2 資料移轉 |
+| `src/Code.js` | Google Apps Script 後端 |
+| `src/ui/` | 網頁介面 |
+| `scripts/build.js` | 產生 `dist/` |
+| `AttendPoint.html` | v2 舊版（保留作為移轉測試資料） |
 
 ## 隱私說明
 

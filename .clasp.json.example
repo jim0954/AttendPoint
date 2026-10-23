@@ -1,5 +1,5 @@
 {
   "scriptId": "請填入你的 Apps Script 專案 ID",
-  "rootDir": "src",
-  "filePushOrder": ["src/store.js", "src/auth.js", "src/migrate-v2.js", "src/Code.js"]
+  "rootDir": "dist/gas",
+  "filePushOrder": ["dist/gas/store.js", "dist/gas/auth.js", "dist/gas/migrate-v2.js", "dist/gas/Code.js"]
 }
