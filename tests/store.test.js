@@ -240,3 +240,31 @@ test('每次操作都會遞增版本號', () => {
   assert.equal(t.state.meta.rev, rev + 1);
   expectError(() => t.run({ type: 'nope' }), 'INVALID_OP');
 });
+
+test('批次匯入：自動學號、自動新增小隊、同名更新、對應班別、略過錯誤列', () => {
+  const t = setup();
+  const y = t.run({ type: 'class.create', name: '青少年班', idPrefix: 'Y', teams: ['慈悲組'] });
+  const r = t.run({
+    type: 'student.import',
+    defaultClassId: t.classId,
+    rows: [
+      { name: '範例丙', teamName: '智慧隊' },
+      { name: '範例甲', teamName: '仁愛隊', note: '新備註' },
+      { className: '青少年', name: '範例丁' },
+      { className: 'Y', name: '範例戊', id: 'y09' },
+      { name: '' },
+      { name: '範例己', id: 'Y09' } // 學號已屬於其他班的學員
+    ]
+  });
+  assert.equal(r.added, 3);
+  assert.equal(r.updated, 1);
+  assert.deepEqual(r.skipped.map((s) => s.line), [5, 6]);
+  const kids = t.cls();
+  assert.deepEqual(kids.teams.map((x) => x.name), ['孝順隊', '仁愛隊', '智慧隊']);
+  const a = t.state.students.find((s) => s.id === t.a);
+  assert.equal(a.teamId, kids.teams[1].id);
+  assert.equal(a.note, '新備註');
+  assert.equal(t.state.students.find((s) => s.name === '範例丙').id, 'K03');
+  assert.equal(t.state.students.find((s) => s.name === '範例丁').classId, y.id);
+  assert.equal(t.state.students.find((s) => s.name === '範例戊').id, 'Y09');
+});

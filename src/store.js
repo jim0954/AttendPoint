@@ -595,6 +595,81 @@
     return { id: student.id };
   };
 
+  /**
+   * 批次匯入名冊（CSV、Excel、LINE 貼上）。
+   *   rows: [{ className?, teamName?, name, id?, note? }]
+   *   defaultClassId: 沒寫班別或對不到時使用
+   * 同班同名（或同學號）的學員視為已存在，只更新小隊與備註；不存在的小隊會自動新增。
+   */
+  OPS['student.import'] = function (state, p, ctx) {
+    if (!Array.isArray(p.rows) || p.rows.length === 0) fail('INVALID_INPUT', '沒有可匯入的資料');
+    if (p.rows.length > 500) fail('INVALID_INPUT', '一次最多匯入 500 筆');
+    const fallback = p.defaultClassId ? mustFind(state.classes, p.defaultClassId, '班別') : null;
+    const result = { added: 0, updated: 0, skipped: [] };
+
+    function resolveClass(name) {
+      const n = String(name || '').trim();
+      if (!n) return fallback;
+      const classes = active(state.classes);
+      return classes.find(function (c) { return c.name === n || c.id === n; }) ||
+        classes.find(function (c) { return c.name.indexOf(n) !== -1 || n.indexOf(c.name) !== -1; }) ||
+        classes.find(function (c) { return c.idPrefix === n.toUpperCase(); }) ||
+        fallback;
+    }
+
+    function resolveTeam(cls, name) {
+      const n = String(name || '').trim();
+      if (!n) return cls.teams[0];
+      let team = cls.teams.find(function (t) { return t.name === n; });
+      if (!team) {
+        if (n.length > 20) fail('INVALID_INPUT', `小隊名稱「${n}」太長`);
+        team = { id: ctx.newId('T'), name: n };
+        cls.teams.push(team);
+        touch(cls, ctx);
+      }
+      return team;
+    }
+
+    p.rows.forEach(function (row, i) {
+      const line = i + 1;
+      const name = String(row.name || '').trim();
+      if (!name) { result.skipped.push({ line: line, reason: '沒有姓名' }); return; }
+      if (name.length > 20) { result.skipped.push({ line: line, reason: `姓名「${name}」超過 20 字` }); return; }
+      const cls = resolveClass(row.className);
+      if (!cls) { result.skipped.push({ line: line, reason: `找不到班別「${row.className || ''}」` }); return; }
+      const team = resolveTeam(cls, row.teamName);
+      const id = String(row.id || '').trim().toUpperCase();
+      const note = String(row.note || '').trim().slice(0, 200);
+      const existing = active(state.students).find(function (s) {
+        return s.classId === cls.id && (s.name === name || (id && s.id === id));
+      });
+      if (existing) {
+        existing.name = name;
+        existing.teamId = team.id;
+        if (note) existing.note = note;
+        touch(existing, ctx);
+        result.updated++;
+        return;
+      }
+      if (id && state.students.some(function (s) { return s.id.toUpperCase() === id; })) {
+        result.skipped.push({ line: line, reason: `學號「${id}」已被其他學員使用` });
+        return;
+      }
+      state.students.push({
+        id: id || nextStudentId(state, cls.id),
+        classId: cls.id,
+        teamId: team.id,
+        name: name,
+        note: note,
+        createdAt: ctx.now(),
+        updatedAt: ctx.now(),
+        deletedAt: null
+      });
+      result.added++;
+    });
+    return result;
+  };
+
   // ----- 報到與加減分 -----
 
   OPS['points.checkin'] = function (state, p, ctx) {
