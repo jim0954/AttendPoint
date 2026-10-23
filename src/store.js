@@ -68,7 +68,8 @@
       {
         now: function () { return localIso(new Date()); },
         newId: defaultNewId,
-        operatorId: null
+        operatorId: null,
+        operatorName: null
       },
       overrides || {}
     );
@@ -304,7 +305,8 @@
         reason: '',
         honorDelta: 0,
         balanceDelta: 0,
-        operatorId: ctx.operatorId || null
+        operatorId: ctx.operatorId || null,
+        operatorName: ctx.operatorName || null
       },
       fields
     );

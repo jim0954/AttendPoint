@@ -232,6 +232,7 @@
         honorDelta: 0,
         balanceDelta: 0,
         operatorId: null,
+        operatorName: null,
         migrated: true
       }, log));
       const sum = sums[log.studentId] || (sums[log.studentId] = { honor: 0, balance: 0 });
@@ -312,6 +313,7 @@
           honorDelta: honorDiff,
           balanceDelta: balanceDiff,
           operatorId: null,
+          operatorName: null,
           migrated: true
         });
         report.openingAdjustments++;
