@@ -28,6 +28,7 @@ npm run build
 - [資料結構](docs/data-model.md)
 - [權限與帳號](docs/permissions.md)
 - [部署到 Google Apps Script](docs/deploy-gas.md)
+- [壓力測試](docs/stress-test.md)
 
 ## 開發
 
@@ -38,6 +39,12 @@ npm test
 ```bash
 npm run gas-sim
 ```
+
+```bash
+npm run stress
+```
+
+壓力測試結果見 [docs/stress-test.md](docs/stress-test.md)。
 
 | 路徑 | 說明 |
 |---|---|
