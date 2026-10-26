@@ -7,6 +7,7 @@
     "test": "node --test \"tests/*.test.js\"",
     "build": "node scripts/build.js",
     "gas-sim": "node scripts/build.js && node scripts/gas-sim.js",
-    "stress": "node scripts/stress.js"
+    "stress": "node scripts/stress.js",
+    "e2e": "node scripts/build.js && node scripts/gas-sim.js && node --test \"tests/e2e/*.e2e.js\""
   }
 }

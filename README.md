@@ -46,6 +46,22 @@ npm run stress
 
 壓力測試結果見 [docs/stress-test.md](docs/stress-test.md)。
 
+瀏覽器自動化測試（用真的瀏覽器操作單機版與模擬雲端版的畫面）需要 Playwright，只有這項要另外安裝：
+
+```bash
+npm install --no-save playwright
+```
+
+```bash
+npx playwright install chromium
+```
+
+```bash
+npm run e2e
+```
+
+沒有安裝 Playwright 時，`npm run e2e` 會略過並提示安裝方式；`npm test` 不需要安裝任何東西。
+
 | 路徑 | 說明 |
 |---|---|
 | `src/store.js` | 資料層（前後端共用） |
@@ -54,6 +70,7 @@ npm run stress
 | `src/Code.js` | Google Apps Script 後端 |
 | `src/ui/` | 網頁介面 |
 | `scripts/build.js` | 產生 `dist/` |
+| `tests/` | 單元測試（`npm test`）；`tests/e2e/` 瀏覽器自動化測試（`npm run e2e`） |
 | `AttendPoint.html` | v2 舊版（保留作為移轉測試資料） |
 
 ## 隱私說明
