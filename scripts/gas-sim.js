@@ -19,9 +19,10 @@ const mocks = `
   const sheets = {};
   const props = { OWNER_PIN: '246810', OWNER_NAME: '模擬堂主' };
   const cache = {};
-  function sheet() {
+  function sheet(name) {
     let cells = [];
     return {
+      getName: function () { return name; },
       getLastRow: function () { return cells.length; },
       clearContents: function () { cells = []; },
       clear: function () { cells = []; },
@@ -38,7 +39,9 @@ const mocks = `
   }
   const ss = {
     getSheetByName: function (n) { return sheets[n] || null; },
-    insertSheet: function (n) { return (sheets[n] = sheet()); }
+    insertSheet: function (n) { return (sheets[n] = sheet(n)); },
+    getSheets: function () { return Object.keys(sheets).map(function (n) { return sheets[n]; }); },
+    deleteSheet: function (sh) { delete sheets[sh.getName()]; }
   };
   window.__simSheets = sheets;
   window.SpreadsheetApp = { getActiveSpreadsheet: function () { return ss; }, openById: function () { return ss; }, flush: function () {}, getUi: function () { throw new Error('no ui'); } };

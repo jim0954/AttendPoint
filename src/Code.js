@@ -10,6 +10,7 @@
  *   SPREADSHEET_ID  資料存放的試算表 ID（選填；從試算表建立的專案可省略）
  *   USERS           壇務帳號（由系統自動維護，請勿手動修改）
  *   DATA_SHEET      目前使用中的資料工作表（由系統自動維護，請勿手動修改）
+ *   BACKUP_KEEP     自動保留的備份份數（選填，預設 10；跨年度結算的備份一律保留，不計入）
  *
  * 所有 api* 函式都回傳 { ok: true, ... } 或 { ok: false, code, message }，不會丟出例外。
  */
@@ -18,6 +19,8 @@
 const DATA_SHEETS = ['_data', '_data_2'];
 const DATA_PTR = 'DATA_SHEET';
 const BACKUP_PREFIX = '_backup_';
+const BACKUP_KEEP = 10;
+const YEAR_RESET_LABEL = 'year_reset';
 const CHUNK_SIZE = 40000; // 單一儲存格上限 50,000 字
 const CHUNK_MARK = '~'; // 避免內容被試算表當成數字或公式
 const TOKEN_TTL = 6 * 60 * 60; // 登入 6 小時有效（CacheService 上限）
@@ -165,7 +168,36 @@ function writeData_(json) {
 function backup_(state, label) {
   const name = BACKUP_PREFIX + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss') + (label ? '_' + label : '');
   writeJson_(name, JSON.stringify(state), true);
+  try {
+    pruneBackups_();
+  } catch (e) {
+    // 清理失敗不影響這次操作，下次備份時會再清
+    console.error(e && e.stack ? e.stack : e);
+  }
   return name;
+}
+
+function backupKeep_() {
+  const n = Number(props_().getProperty('BACKUP_KEEP'));
+  return Number.isInteger(n) && n >= 1 ? n : BACKUP_KEEP;
+}
+
+/**
+ * 只保留最新的 BACKUP_KEEP 份備份，較舊的刪除。
+ * 跨年度結算的備份是前一年度唯一的完整紀錄，一年只有一份，一律保留。
+ * 工作表名稱含日期時間（_backup_yyyyMMdd_HHmmss_…），依名稱排序即為新舊順序。
+ */
+function pruneBackups_() {
+  const ss = spreadsheet_();
+  const old = ss.getSheets()
+    .filter(function (sh) {
+      const name = sh.getName();
+      return name.indexOf(BACKUP_PREFIX) === 0 && name.slice(-YEAR_RESET_LABEL.length) !== YEAR_RESET_LABEL;
+    })
+    .sort(function (a, b) { return a.getName() < b.getName() ? 1 : -1; })
+    .slice(backupKeep_());
+  old.forEach(function (sh) { ss.deleteSheet(sh); });
+  return old.map(function (sh) { return sh.getName(); });
 }
 
 // 快取目前資料版本，資料沒變時讀取不必打開試算表（快取遺失時改讀試算表）
@@ -308,7 +340,7 @@ function apiApply(token, op, since) {
       const now = nowIso_();
       AttendAuth.authorize(state, op, user, now.slice(0, 10));
       let backup = null;
-      if (op.type === 'year.reset') backup = backup_(state, 'year_reset');
+      if (op.type === 'year.reset') backup = backup_(state, YEAR_RESET_LABEL);
       const r = AttendStore.apply(state, op, { now: function () { return nowIso_(); }, operatorId: user.id, operatorName: user.name });
       writeState_(r.state);
       return Object.assign({ result: r.result, backup: backup }, AttendAuth.syncView(r.state, user, since));

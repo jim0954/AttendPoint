@@ -8,10 +8,11 @@ const crypto = require('node:crypto');
 const SRC = path.join(__dirname, '..', 'src');
 const LOAD_ORDER = ['store.js', 'auth.js', 'migrate-v2.js', 'Code.js'];
 
-function mockSheet() {
+function mockSheet(name) {
   let cells = []; // cells[row][col]
   return {
     hidden: false,
+    getName: () => name,
     cells: () => cells,
     getLastRow: () => cells.length,
     clearContents() { cells = []; },
@@ -39,7 +40,9 @@ function createGas(propsInit) {
   const cache = {};
   const ss = {
     getSheetByName: (n) => sheets[n] || null,
-    insertSheet: (n) => (sheets[n] = mockSheet())
+    insertSheet: (n) => (sheets[n] = mockSheet(n)),
+    getSheets: () => Object.values(sheets).filter(Boolean),
+    deleteSheet: (sh) => { delete sheets[sh.getName()]; }
   };
   const context = {
     console,

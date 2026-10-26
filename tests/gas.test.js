@@ -276,3 +276,67 @@ test('寫入安全：舊版只有 _data 工作表時照常讀取，下次寫入�
   assert.equal(props.DATA_SHEET, '_data_2');
   assert.equal(ok(g.apiGetState(owner, null)).state.students.length, 1);
 });
+
+// ---------- 備份清理 ----------
+
+function backupNames(sheets) {
+  return Object.keys(sheets).filter((n) => n.startsWith('_backup_') && sheets[n]).sort();
+}
+
+test('備份清理：只保留最新 10 份，跨年度結算的備份一律保留', () => {
+  const { g, owner, sheets } = setup();
+  const backup = ok(g.apiExportBackup(owner)).json;
+  // 先放 12 份舊的匯入備份、2 份舊的跨年度結算備份
+  for (let i = 1; i <= 12; i++) g.writeJson_(`_backup_2025${String(i).padStart(2, '0')}01_090000_before_import`, backup, true);
+  g.writeJson_('_backup_20240101_090000_year_reset', backup, true);
+  g.writeJson_('_backup_20250101_090000_year_reset', backup, true);
+
+  const res = ok(g.apiImportState(owner, backup)); // 產生第 13 份匯入備份，觸發清理
+  const names = backupNames(sheets);
+  assert.ok(names.includes(res.backup));
+  assert.ok(names.includes('_backup_20240101_090000_year_reset'));
+  assert.ok(names.includes('_backup_20250101_090000_year_reset'));
+  const imports = names.filter((n) => !n.endsWith('year_reset'));
+  assert.equal(imports.length, 10);
+  // 刪掉的是最舊的三份
+  assert.equal(imports.includes('_backup_20250101_090000_before_import'), false);
+  assert.equal(imports.includes('_backup_20250301_090000_before_import'), false);
+  assert.equal(imports.includes('_backup_20250401_090000_before_import'), true);
+  // 資料工作表不受影響
+  assert.ok(ok(g.apiGetState(owner, null)).state.classes.length === 1);
+});
+
+test('備份清理：可用 BACKUP_KEEP 調整份數，設定錯誤時用預設值', () => {
+  const env = setup();
+  const { g, owner, sheets, props } = env;
+  const backup = ok(g.apiExportBackup(owner)).json;
+  for (let i = 1; i <= 5; i++) g.writeJson_(`_backup_2025010${i}_090000_before_import`, backup, true);
+  props.BACKUP_KEEP = '3';
+  ok(g.apiImportState(owner, backup));
+  assert.equal(backupNames(sheets).length, 3);
+
+  props.BACKUP_KEEP = 'abc';
+  for (let i = 1; i <= 12; i++) g.writeJson_(`_backup_2024${String(i).padStart(2, '0')}01_090000_before_import`, backup, true);
+  assert.equal(g.backupKeep_(), 10);
+  g.pruneBackups_();
+  assert.equal(backupNames(sheets).length, 10);
+});
+
+test('備份清理：清理失敗不影響跨年度結算', () => {
+  const env = setup();
+  const { g, owner, sheets } = env;
+  const ss = g.SpreadsheetApp.getActiveSpreadsheet();
+  ss.getSheets = () => { throw new Error('Service error'); };
+  const errors = [];
+  const origError = console.error;
+  console.error = (e) => errors.push(e);
+  try {
+    const res = ok(g.apiApply(owner, { type: 'year.reset', yearLabel: '2027 年度' }));
+    assert.ok(res.backup.endsWith('year_reset'));
+  } finally {
+    console.error = origError;
+  }
+  assert.equal(errors.length, 1); // 清理失敗有記錄下來
+  assert.equal(ok(g.apiGetState(owner, null)).state.meta.yearLabel, '2027 年度');
+  assert.ok(backupNames(sheets).length >= 1);
+});
