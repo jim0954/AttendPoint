@@ -151,6 +151,7 @@ function median(fn) {
 }
 
 const mb = (chars) => (chars / 1024 / 1024).toFixed(2) + ' MB';
+const kb = (chars) => (chars / 1024).toFixed(1) + ' KB';
 const ms = (x) => x.toFixed(1) + ' ms';
 
 function measure(sc, outDir) {
@@ -172,22 +173,33 @@ function measure(sc, outDir) {
   let next = 0;
   const checkinOp = () => ({ type: 'points.checkin', studentId: ids[next++ % ids.length], sessionId });
 
-  // 後端：一次點名的完整流程與各步驟
+  // 後端：一次點名的完整流程與各步驟（前端第一次整份下載，之後只收變動）
+  const Auth = g.AttendAuth;
+  const staffBase = JSON.parse(JSON.stringify(g.apiGetState(token, null))).state;
+  let base = staffBase;
   const apply = median(() => {
-    const res = g.apiApply(token, checkinOp());
+    const res = g.apiApply(token, checkinOp(), Auth.sinceOf(base, 'full'));
     if (!res.ok) throw new Error(res.code + ' ' + res.message);
-    return JSON.stringify(res); // google.script.run 會把回傳值序列化傳回瀏覽器
+    const wire = JSON.stringify(res); // google.script.run 會把回傳值序列化傳回瀏覽器
+    base = Auth.mergeView(base, JSON.parse(wire));
+    return wire;
   });
+  const applyFull = median(() => JSON.stringify(g.apiApply(token, checkinOp())));
   const read = median(() => g.readState_());
   const cur = read.v;
   const user = g.AttendAuth.publicUser(g.builtinOwner_());
   const applyOnly = median(() => g.AttendStore.apply(cur, { type: 'points.award', studentId: ids[0], points: 1, reason: '量測' }, { operatorId: user.id, operatorName: user.name }));
   const write = median(() => g.writeState_(cur));
-  const respond = median(() => JSON.stringify({ ok: true, state: g.AttendAuth.viewFor(cur, user) }));
 
-  // 讀取（每 30 秒輪詢一次）：壇務與訪客
-  const getStaff = median(() => JSON.stringify(g.apiGetState(token)));
-  const getGuest = median(() => JSON.stringify(g.apiGetState(null)));
+  // 讀取（每 30 秒輪詢一次）
+  const getStaffFull = median(() => JSON.stringify(g.apiGetState(token, null)));
+  const getGuestFull = median(() => JSON.stringify(g.apiGetState(null, null)));
+  base = JSON.parse(getStaffFull.v).state;
+  const getUnchanged = median(() => JSON.stringify(g.apiGetState(token, Auth.sinceOf(base, 'full'))));
+  // 訪客：兩次輪詢之間有 10 人點名
+  const guestBase = JSON.parse(getGuestFull.v).state;
+  for (let i = 0; i < 10; i++) g.apiApply(token, checkinOp());
+  const getGuestDelta = median(() => JSON.stringify(g.apiGetState(null, Auth.sinceOf(guestBase, 'guest'))));
 
   // 瀏覽器端：解析回傳資料、重算總分
   const parse = median(() => JSON.parse(apply.v));
@@ -201,13 +213,15 @@ function measure(sc, outDir) {
     cells: Math.ceil(json.length / CELL_CHARS),
     apply: apply.ms,
     applyResponse: apply.v.length,
+    applyFullResponse: applyFull.v.length,
     read: read.ms,
     applyOnly: applyOnly.ms,
     write: write.ms,
-    respond: respond.ms,
-    getStaff: getStaff.ms,
-    getStaffSize: getStaff.v.length,
-    getGuestSize: getGuest.v.length,
+    getStaff: getStaffFull.ms,
+    getStaffSize: getStaffFull.v.length,
+    getUnchanged: getUnchanged.ms,
+    getUnchangedSize: getUnchanged.v.length,
+    getGuestDeltaSize: getGuestDelta.v.length,
     parse: parse.ms,
     totals: totals.ms
   };
@@ -229,14 +243,16 @@ function main() {
     ['    讀取＋解析資料', ...rows.map((r) => ms(r.read))],
     ['    套用操作（複製整份資料）', ...rows.map((r) => ms(r.applyOnly))],
     ['    寫回試算表', ...rows.map((r) => ms(r.write))],
-    ['    序列化回傳資料', ...rows.map((r) => ms(r.respond))],
-    ['  回傳給瀏覽器的大小', ...rows.map((r) => mb(r.applyResponse))],
+    ['  回傳給瀏覽器（只傳變動）', ...rows.map((r) => kb(r.applyResponse))],
+    ['  回傳給瀏覽器（舊做法整份）', ...rows.map((r) => mb(r.applyFullResponse))],
     ['  瀏覽器解析回傳', ...rows.map((r) => ms(r.parse))],
     ['  瀏覽器重算總分', ...rows.map((r) => ms(r.totals))],
     ['── 讀取（每 30 秒輪詢）', ...rows.map(() => '')],
-    ['  後端耗時（壇務）', ...rows.map((r) => ms(r.getStaff))],
-    ['  傳輸大小（壇務）', ...rows.map((r) => mb(r.getStaffSize))],
-    ['  傳輸大小（訪客）', ...rows.map((r) => mb(r.getGuestSize))]
+    ['  資料沒變：後端耗時', ...rows.map((r) => ms(r.getUnchanged))],
+    ['  資料沒變：傳輸大小', ...rows.map((r) => kb(r.getUnchangedSize))],
+    ['  有 10 人點名：傳輸大小（訪客）', ...rows.map((r) => kb(r.getGuestDeltaSize))],
+    ['  開啟網頁第一次下載：後端耗時', ...rows.map((r) => ms(r.getStaff))],
+    ['  開啟網頁第一次下載：傳輸大小', ...rows.map((r) => mb(r.getStaffSize))]
   ];
   const width = (s) => Array.from(s).reduce((n, ch) => n + (ch.charCodeAt(0) > 0x2e80 ? 2 : 1), 0);
   const cols = table[0].map((_, i) => Math.max(...table.map((row) => width(row[i]))));

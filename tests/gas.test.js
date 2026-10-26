@@ -148,3 +148,39 @@ test('大量資料會分段存放在多個儲存格', () => {
   assert.ok(sheets._data.cells().length > 3);
   assert.equal(ok(g.apiGetState(owner)).state.students.length, 1500);
 });
+
+test('增量同步：點名只回傳新增紀錄；資料沒變時不讀試算表', () => {
+  const { g, staff, classId, sheets } = setup();
+  const session = ok(g.apiApply(staff, { type: 'session.ensure', classId, date: '2026-10-24' })).result;
+  const stu = ok(g.apiApply(staff, { type: 'student.create', classId, name: '王小明' })).result;
+  let base = ok(g.apiGetState(staff, null)).state;
+  const since = () => g.AttendAuth.sinceOf(base, 'full');
+
+  const res = ok(g.apiApply(staff, { type: 'points.checkin', studentId: stu.id, sessionId: session.id }, since()));
+  assert.equal(res.state, undefined);
+  assert.equal(res.delta.logs.length, 1);
+  base = JSON.parse(JSON.stringify(g.AttendAuth.mergeView(base, res)));
+  assert.deepEqual(base, ok(g.apiGetState(staff, null)).state);
+
+  // 沒有變動：直接由快取判斷，不打開試算表
+  const data = sheets._data;
+  sheets._data = null;
+  const same = ok(g.apiGetState(staff, since()));
+  assert.equal(same.unchanged, true);
+  assert.equal(same.state, undefined);
+  assert.equal(same.user.name, '壇務甲');
+  sheets._data = data;
+});
+
+test('增量同步：快取遺失時改讀試算表；匯入資料後各裝置整份重新下載', () => {
+  const { g, owner, cache } = setup();
+  const base = ok(g.apiGetState(owner, null)).state;
+  const since = g.AttendAuth.sinceOf(base, 'full');
+  delete cache.sync;
+  assert.equal(ok(g.apiGetState(owner, since)).unchanged, true);
+
+  const backup = ok(g.apiExportBackup(owner)).json;
+  const imported = ok(g.apiImportState(owner, backup));
+  assert.notEqual(imported.state.meta.syncId, base.meta.syncId);
+  assert.ok(ok(g.apiGetState(owner, since)).state);
+});

@@ -15,7 +15,7 @@
 ```
 state
 ├─ schemaVersion   3
-├─ meta            { templeTitle, yearLabel, rev, updatedAt }
+├─ meta            { templeTitle, yearLabel, rev, syncId, updatedAt }
 ├─ classes[]       班別
 ├─ sessions[]      課次
 ├─ staff[]         服務人員
@@ -85,6 +85,15 @@ state
 | 系統 | `meta.update`、`year.reset` |
 
 階段 2 會依這份清單訂出權限表：`*.delete`、`*.restore`、`points.adjust`、`year.reset` 僅限擁有者。
+
+## 雲端同步（只傳變動）
+
+雲端版不會每次都傳整份資料（一年可達數 MB），而是由前端送出手上的版本，後端只回傳差異（`AttendAuth.syncView`／`mergeView`）：
+
+- `meta.rev`：每次操作加 1。版本相同時，後端只回「沒有變動」，而且直接比對快取，不必打開試算表。
+- `meta.syncId`：流水帳只新增紀錄時不變，前端只要補上新紀錄，其他資料表（都不大）整份附上。
+- 跨年度結算、刪除或還原學員、匯入資料時，會換一個 `syncId`（由 `apply()` 自動判斷），各裝置下次就整份重新下載。
+- 訪客與壇務看到的資料不同（訪客名字遮蔽），切換登入身分時也會整份重新下載。
 
 ## 錯誤代碼
 

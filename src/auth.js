@@ -140,6 +140,59 @@
     };
   }
 
+  // ---------- 增量同步 ----------
+  // 雲端版每次操作都傳整份資料太慢（一年可達數 MB），改成只傳變動：
+  //   前端送出手上的版本 since = { view, syncId, rev, logCount }
+  //   後端回傳 { view, unchanged: true }：資料沒變
+  //            { view, delta }：流水帳只新增，delta 含 logsFrom 之後的新紀錄與其他（較小的）資料表
+  //            { view, state }：版本對不上，整份重傳
+  // 流水帳以外的資料表都不大，每次整份附上，避免逐筆比對出錯。
+
+  function viewKind(user) {
+    return atLeast(user, 'staff') ? 'full' : 'guest';
+  }
+
+  function syncInfo(state) {
+    return { syncId: state.meta.syncId || '', rev: state.meta.rev || 0 };
+  }
+
+  function sameVersion(state, since, kind) {
+    return !!since && since.view === kind && !!since.syncId &&
+      since.syncId === state.meta.syncId && since.rev === state.meta.rev;
+  }
+
+  function syncView(state, user, since) {
+    const kind = viewKind(user);
+    if (sameVersion(state, since, kind)) return { view: kind, unchanged: true };
+    const view = viewFor(state, user);
+    const usable = !!since && since.view === kind && !!since.syncId && since.syncId === state.meta.syncId &&
+      since.rev < state.meta.rev && since.logCount >= 0 && since.logCount <= view.logs.length;
+    if (!usable) return { view: kind, state: view };
+    const delta = {};
+    Object.keys(view).forEach(function (k) { if (k !== 'logs') delta[k] = view[k]; });
+    delta.logsFrom = since.logCount;
+    delta.logs = view.logs.slice(since.logCount);
+    return { view: kind, delta: delta };
+  }
+
+  /** 前端：送給後端的 since（base 為上次後端確認的資料） */
+  function sinceOf(base, kind) {
+    if (!base || !base.meta) return null;
+    return { view: kind, syncId: base.meta.syncId || '', rev: base.meta.rev || 0, logCount: base.logs.length };
+  }
+
+  /** 前端：把 syncView 的回應合併到 base，回傳完整資料（不修改 base） */
+  function mergeView(base, res) {
+    if (res.state) return res.state;
+    if (res.unchanged) return base;
+    const d = res.delta;
+    if (!base || base.logs.length !== d.logsFrom) throw new AuthError('SYNC_MISMATCH', '資料同步失敗，請重新整理頁面');
+    const out = {};
+    Object.keys(d).forEach(function (k) { if (k !== 'logsFrom') out[k] = d[k]; });
+    out.logs = base.logs.concat(d.logs);
+    return out;
+  }
+
   // ---------- 帳號 ----------
 
   function validatePin(pin) {
@@ -256,6 +309,12 @@
     can: can,
     maskName: maskName,
     viewFor: viewFor,
+    viewKind: viewKind,
+    syncInfo: syncInfo,
+    sameVersion: sameVersion,
+    syncView: syncView,
+    sinceOf: sinceOf,
+    mergeView: mergeView,
     validatePin: validatePin,
     hashPin: hashPin,
     verifyPin: verifyPin,

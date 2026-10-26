@@ -126,8 +126,17 @@ function writeJson_(sheetName, json, hidden) {
   if (hidden) sheet.hideSheet();
 }
 
+// 快取目前資料版本，資料沒變時讀取不必打開試算表（快取遺失時改讀試算表）
+const SYNC_KEY = 'sync';
+
+function syncKey_(info) {
+  return info.syncId + ':' + info.rev;
+}
+
 function writeState_(state) {
+  cache_().remove(SYNC_KEY);
   writeJson_(DATA_SHEET, JSON.stringify(state), true);
+  cache_().put(SYNC_KEY, syncKey_(AttendAuth.syncInfo(state)), TOKEN_TTL);
 }
 
 function backup_(state, label) {
@@ -232,8 +241,11 @@ function apiLogout(token) {
   });
 }
 
-/** 讀取資料。token 失效時改回傳訪客畫面，並標記 sessionExpired。 */
-function apiGetState(token) {
+/**
+ * 讀取資料。token 失效時改回傳訪客畫面，並標記 sessionExpired。
+ * since 為前端手上的版本（見 AttendAuth.syncView），有的話只回傳變動。
+ */
+function apiGetState(token, since) {
   return respond_(function () {
     let user = null;
     let sessionExpired = false;
@@ -243,13 +255,16 @@ function apiGetState(token) {
       if (e.code !== 'SESSION_EXPIRED') throw e;
       sessionExpired = true;
     }
-    const state = readState_();
-    return { user: user, sessionExpired: sessionExpired, state: AttendAuth.viewFor(state, user) };
+    const kind = AttendAuth.viewKind(user);
+    if (since && since.view === kind && cache_().get(SYNC_KEY) === syncKey_(since)) {
+      return { user: user, sessionExpired: sessionExpired, view: kind, unchanged: true };
+    }
+    return Object.assign({ user: user, sessionExpired: sessionExpired }, AttendAuth.syncView(readState_(), user, since));
   });
 }
 
-/** 執行一個資料操作（op 格式見 docs/data-model.md），回傳結果與最新資料 */
-function apiApply(token, op) {
+/** 執行一個資料操作（op 格式見 docs/data-model.md），回傳結果與最新資料（有 since 時只回傳變動） */
+function apiApply(token, op, since) {
   return respond_(function () {
     const user = requireUser_(token);
     return withLock_(function () {
@@ -260,7 +275,7 @@ function apiApply(token, op) {
       if (op.type === 'year.reset') backup = backup_(state, 'year_reset');
       const r = AttendStore.apply(state, op, { now: function () { return nowIso_(); }, operatorId: user.id, operatorName: user.name });
       writeState_(r.state);
-      return { result: r.result, backup: backup, state: AttendAuth.viewFor(r.state, user) };
+      return Object.assign({ result: r.result, backup: backup }, AttendAuth.syncView(r.state, user, since));
     });
   });
 }
@@ -313,9 +328,10 @@ function apiImportState(token, raw) {
     if (user.role !== 'owner') throw appError_('FORBIDDEN', '匯入資料僅限擁有者操作');
     return withLock_(function () {
       const loaded = AttendMigrate.loadAny(raw, { now: nowIso_ });
+      loaded.state.meta.syncId = 'Y' + Utilities.getUuid(); // 整份換掉，各裝置都要重新下載
       const backup = backup_(readState_(), 'before_import');
       writeState_(loaded.state);
-      return { migratedFrom: loaded.migratedFrom, report: loaded.report, backup: backup, state: loaded.state };
+      return { migratedFrom: loaded.migratedFrom, report: loaded.report, backup: backup, view: 'full', state: loaded.state };
     });
   });
 }

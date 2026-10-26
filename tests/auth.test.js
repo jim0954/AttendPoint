@@ -133,3 +133,64 @@ test('帳號：建立、驗證 PIN、改 PIN、停用、權限檢查', () => {
   assert.equal(users[0].disabled, true);
   assert.throws(() => Auth.applyUserOp(users, { type: 'self.changePin', oldPin: '1', newPin: '2222' }, owner, deps), forbidden);
 });
+
+// 模擬前端：保留上次的資料，送出 since，把回應合併回完整資料
+function syncClient(user) {
+  let base = null;
+  let kind = null;
+  return {
+    pull(state, who) {
+      const res = JSON.parse(JSON.stringify(Auth.syncView(state, who === undefined ? user : who, Auth.sinceOf(base, kind))));
+      base = Auth.mergeView(base, res);
+      kind = res.view;
+      return res;
+    },
+    get base() { return base; }
+  };
+}
+
+test('增量同步：第一次整份，之後只傳新增的紀錄，沒變動時不傳資料', () => {
+  const t = setup();
+  const c = syncClient(staffA);
+  assert.ok(c.pull(t.state).state);
+  assert.deepEqual(c.pull(t.state), { view: 'full', unchanged: true });
+
+  t.run({ type: 'points.checkin', studentId: t.studentId, sessionId: t.sessionId }, staffA);
+  t.run({ type: 'student.update', id: t.studentId, patch: { note: '改過' } }, staffA);
+  const res = c.pull(t.state);
+  assert.equal(res.delta.logsFrom, 0);
+  assert.equal(res.delta.logs.length, 1);
+  assert.deepEqual(c.base, t.state); // 合併後與後端完全一致
+});
+
+test('增量同步：訪客看遮蔽後的資料；刪除學員後整份重傳', () => {
+  const t = setup();
+  const guest = syncClient(null);
+  guest.pull(t.state);
+  t.run({ type: 'points.checkin', studentId: t.studentId, sessionId: t.sessionId }, staffA);
+  const res = guest.pull(t.state);
+  assert.equal(res.view, 'guest');
+  assert.equal(res.delta.logs.length, 1);
+  assert.equal(res.delta.logs[0].operatorName, undefined);
+  assert.deepEqual(guest.base, Auth.viewFor(t.state, null));
+
+  t.run({ type: 'student.delete', id: t.studentId }, owner);
+  assert.ok(guest.pull(t.state).state);
+  assert.deepEqual(guest.base, Auth.viewFor(t.state, null));
+  assert.equal(guest.base.logs.length, 0);
+});
+
+test('增量同步：登入後由訪客畫面換成完整資料；版本對不上時整份重傳', () => {
+  const t = setup();
+  const c = syncClient(null);
+  c.pull(t.state);
+  const res = c.pull(t.state, staffA);
+  assert.equal(res.view, 'full');
+  assert.ok(res.state);
+  assert.equal(c.base.students[0].name, '王小明');
+  // since 異常（紀錄數比後端多）時不給增量
+  const odd = Auth.syncView(t.state, staffA, { view: 'full', syncId: t.state.meta.syncId, rev: 0, logCount: 99 });
+  assert.ok(odd.state);
+  // 合併時長度對不上會報錯，不會產生錯誤資料
+  assert.throws(() => Auth.mergeView({ logs: [] }, { delta: { logsFrom: 3, logs: [] } }), (e) => e.code === 'SYNC_MISMATCH');
+});

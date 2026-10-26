@@ -327,3 +327,29 @@ test('舊格式 defaultSchedule 自動升級為 schedule', () => {
   assert.deepEqual(state.classes[1].schedule, []);
   assert.equal('defaultSchedule' in state.classes[0], false);
 });
+
+test('syncId：只新增紀錄時不變；跨年度結算、刪除或還原學員時更換', () => {
+  const t = setup();
+  const id0 = t.state.meta.syncId;
+  assert.ok(id0);
+  t.run({ type: 'points.checkin', studentId: t.a, sessionId: t.sessionId });
+  t.run({ type: 'points.batch', classId: t.classId, target: { all: true }, points: 5, reason: '整潔' });
+  t.run({ type: 'student.update', id: t.b, patch: { note: '改備註' } });
+  t.run({ type: 'student.create', classId: t.classId, name: '範例丙' });
+  assert.equal(t.state.meta.syncId, id0);
+
+  t.run({ type: 'student.delete', id: t.b });
+  const id1 = t.state.meta.syncId;
+  assert.notEqual(id1, id0);
+  t.run({ type: 'student.restore', id: t.b });
+  const id2 = t.state.meta.syncId;
+  assert.notEqual(id2, id1);
+  t.run({ type: 'year.reset', yearLabel: '2027 年度' });
+  assert.notEqual(t.state.meta.syncId, id2);
+});
+
+test('syncId：舊資料沒有 syncId 時自動補上', () => {
+  const state = Store.emptyState();
+  delete state.meta.syncId;
+  assert.ok(Store.upgrade(state).meta.syncId);
+});

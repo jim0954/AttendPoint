@@ -140,6 +140,7 @@
         templeTitle: opts.templeTitle || '佛堂班程報到加分系統',
         yearLabel: opts.yearLabel || '',
         rev: 0,
+        syncId: defaultNewId('Y'),
         updatedAt: null
       },
       classes: [],
@@ -285,6 +286,7 @@
 
   /** 舊資料升級：v3 早期版本的 defaultSchedule 改為 schedule 陣列 */
   function upgrade(state) {
+    if (state.meta && !state.meta.syncId) state.meta.syncId = defaultNewId('Y');
     (state.classes || []).forEach(function (c) {
       if (!Array.isArray(c.schedule)) c.schedule = normalizeSchedule(c.defaultSchedule);
       delete c.defaultSchedule;
@@ -976,7 +978,24 @@
     const result = handler(draft, payload, ctx);
     draft.meta.rev = (draft.meta.rev || 0) + 1;
     draft.meta.updatedAt = ctx.now();
+    if (!appendOnly(state, draft)) draft.meta.syncId = ctx.newId('Y');
     return { state: draft, result: result };
+  }
+
+  /**
+   * 這次操作是否只在流水帳後面新增紀錄、且原有學員的在籍狀態沒變（新增學員不影響）。
+   * 是的話，前端只要補上新紀錄就能同步（見 AttendAuth.syncView）；
+   * 否則（跨年度結算、刪除或還原學員）換一個 syncId，前端會重新下載整份資料。
+   */
+  function appendOnly(before, after) {
+    const n = before.logs.length;
+    if (after.logs.length < n) return false;
+    if (n > 0 && after.logs[n - 1].id !== before.logs[n - 1].id) return false;
+    const live = {};
+    after.students.forEach(function (s) { live[s.id] = !s.deletedAt; });
+    return before.students.every(function (s) {
+      return s.id in live ? live[s.id] === !s.deletedAt : !!s.deletedAt;
+    });
   }
 
   return {

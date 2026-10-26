@@ -26,6 +26,8 @@
   function GasBackend() {
     this.mode = 'gas';
     this.token = null;
+    this.base = null; // 上次後端確認的資料，用來只下載變動（見 AttendAuth.syncView）
+    this.baseView = null;
     try { this.token = localStorage.getItem('attendpoint_token'); } catch (e) {}
   }
 
@@ -43,6 +45,36 @@
     });
   };
 
+  /** 呼叫會回傳資料的 API：附上手上的版本，把回傳的變動合併成完整資料放在 res.state */
+  GasBackend.prototype.sync = function (name) {
+    const self = this;
+    const args = Array.prototype.slice.call(arguments, 1);
+    const base = this.base;
+    const since = AttendAuth.sinceOf(base, this.baseView);
+    return this.call.apply(this, [name].concat(args, [since])).then(function (res) {
+      try {
+        res.state = AttendAuth.mergeView(base, res);
+      } catch (e) {
+        // 理論上不會發生；保險起見整份重新下載
+        self.base = null;
+        return self.call('apiGetState', self.token, null).then(function (full) {
+          res.state = full.state;
+          res.view = full.view;
+          return self.keep(res);
+        });
+      }
+      return self.keep(res);
+    });
+  };
+
+  GasBackend.prototype.keep = function (res) {
+    this.base = res.state;
+    this.baseView = res.view;
+    delete res.delta;
+    delete res.unchanged;
+    return res;
+  };
+
   GasBackend.prototype.setToken = function (token) {
     this.token = token;
     try {
@@ -54,7 +86,7 @@
   GasBackend.prototype.init = function () { return this.getState(); };
   GasBackend.prototype.getState = function () {
     const self = this;
-    return this.call('apiGetState', this.token).then(function (res) {
+    return this.sync('apiGetState', this.token).then(function (res) {
       if (res.sessionExpired) self.setToken(null);
       return res;
     });
@@ -74,13 +106,16 @@
     this.setToken(null);
     return this.call('apiLogout', token).catch(function () {});
   };
-  GasBackend.prototype.apply = function (op) { return this.call('apiApply', this.token, op); };
+  GasBackend.prototype.apply = function (op) { return this.sync('apiApply', this.token, op); };
   GasBackend.prototype.listUsers = function () { return this.call('apiListUsers', this.token); };
   GasBackend.prototype.userOp = function (op) { return this.call('apiUserOp', this.token, op); };
   GasBackend.prototype.exportBackup = function () {
     return this.call('apiExportBackup', this.token).then(function (res) { return res.json; });
   };
-  GasBackend.prototype.importState = function (raw) { return this.call('apiImportState', this.token, raw); };
+  GasBackend.prototype.importState = function (raw) {
+    const self = this;
+    return this.call('apiImportState', this.token, raw).then(function (res) { return self.keep(res); });
+  };
   GasBackend.prototype.rebuildReports = function () { return this.call('apiRebuildReports', this.token); };
 
   // ---------- 單機版（瀏覽器 localStorage） ----------
