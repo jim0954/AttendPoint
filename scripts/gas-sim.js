@@ -41,7 +41,7 @@ const mocks = `
     insertSheet: function (n) { return (sheets[n] = sheet()); }
   };
   window.__simSheets = sheets;
-  window.SpreadsheetApp = { getActiveSpreadsheet: function () { return ss; }, openById: function () { return ss; }, getUi: function () { throw new Error('no ui'); } };
+  window.SpreadsheetApp = { getActiveSpreadsheet: function () { return ss; }, openById: function () { return ss; }, flush: function () {}, getUi: function () { throw new Error('no ui'); } };
   window.PropertiesService = { getScriptProperties: function () { return {
     getProperty: function (k) { return k in props ? props[k] : null; },
     setProperty: function (k, v) { props[k] = String(v); }

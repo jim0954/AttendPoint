@@ -26,6 +26,6 @@
 ## 目前進度
 
 - 階段 0–3 完成（資料層、權限、GAS 後端、網頁介面），另含調整 3-7 小隊選填、3-8 彈性常態上課時間。
-- 階段 4-1 壓力測試（`npm run stress`，見 `docs/stress-test.md`）、4-2 雲端只傳變動（`meta.syncId`、`AttendAuth.syncView`）完成。
+- 階段 4-1 壓力測試（`npm run stress`，見 `docs/stress-test.md`）、4-2 雲端只傳變動（`meta.syncId`、`AttendAuth.syncView`）、4-3 寫入安全（`_data`／`_data_2` 輪流寫入，`DATA_SHEET` 屬性切換）完成。
 - 尚未部署到真正的 Google Apps Script 實測（階段 4 其餘測試、階段 5 GitHub 門面與部署、階段 6 佛堂試行）。
 - 根目錄 `AttendPoint.html` 是 v2 舊版，`tests/migrate-v2.test.js` 用它當移轉測試資料。

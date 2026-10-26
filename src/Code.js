@@ -9,11 +9,14 @@
  *   OWNER_NAME      擁有者主帳號顯示名稱（選填，預設「擁有者」）
  *   SPREADSHEET_ID  資料存放的試算表 ID（選填；從試算表建立的專案可省略）
  *   USERS           壇務帳號（由系統自動維護，請勿手動修改）
+ *   DATA_SHEET      目前使用中的資料工作表（由系統自動維護，請勿手動修改）
  *
  * 所有 api* 函式都回傳 { ok: true, ... } 或 { ok: false, code, message }，不會丟出例外。
  */
 
-const DATA_SHEET = '_data';
+// 資料輪流寫在兩個工作表，寫完並檢查無誤才切換 DATA_SHEET 屬性，寫到一半失敗也不會損壞現有資料
+const DATA_SHEETS = ['_data', '_data_2'];
+const DATA_PTR = 'DATA_SHEET';
 const BACKUP_PREFIX = '_backup_';
 const CHUNK_SIZE = 40000; // 單一儲存格上限 50,000 字
 const CHUNK_MARK = '~'; // 避免內容被試算表當成數字或公式
@@ -93,7 +96,7 @@ function withLock_(fn) {
   }
 }
 
-// ---------- 資料儲存（試算表 _data 工作表） ----------
+// ---------- 資料儲存（試算表 _data／_data_2 工作表） ----------
 
 function spreadsheet_() {
   const id = props_().getProperty('SPREADSHEET_ID');
@@ -102,18 +105,35 @@ function spreadsheet_() {
   return ss;
 }
 
-function readState_() {
-  const sheet = spreadsheet_().getSheetByName(DATA_SHEET);
-  if (!sheet || sheet.getLastRow() < 1) return AttendStore.emptyState();
-  const json = sheet
+/** 讀取分段存放的 JSON；工作表不存在或空白時回傳空字串 */
+function readJson_(sheetName) {
+  const sheet = spreadsheet_().getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 1) return '';
+  return sheet
     .getRange(1, 1, sheet.getLastRow(), 1)
     .getValues()
     .map(function (row) { return String(row[0]).slice(CHUNK_MARK.length); })
     .join('');
-  if (!json) return AttendStore.emptyState();
-  return AttendMigrate.loadAny(json).state;
 }
 
+function readState_() {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ptr = props_().getProperty(DATA_PTR);
+    const json = readJson_(ptr || DATA_SHEETS[0]);
+    // 只有還沒寫過資料（全新安裝）才當作空白資料；寫過之後讀不到就停止，避免空白資料覆蓋原本的資料
+    if (!json && !ptr) return AttendStore.emptyState();
+    if (!json) continue;
+    try {
+      return AttendMigrate.loadAny(json).state;
+    } catch (e) {
+      // 讀取時剛好遇到別人連續寫入（極少見），內容不完整，重新讀一次
+      if (!(e instanceof SyntaxError)) throw e;
+    }
+  }
+  throw appError_('DATA_UNREADABLE', '資料讀取失敗，為了保護資料已暫停操作，請稍後再試；持續發生請擁有者從備份工作表還原');
+}
+
+/** 寫入分段 JSON，回傳寫入的列數 */
 function writeJson_(sheetName, json, hidden) {
   const ss = spreadsheet_();
   const sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
@@ -124,6 +144,28 @@ function writeJson_(sheetName, json, hidden) {
   range.setNumberFormat('@');
   range.setValues(rows);
   if (hidden) sheet.hideSheet();
+  return rows.length;
+}
+
+/** 寫到目前沒在使用的工作表，確認寫入完整後才切換，切換前讀取的人仍看到舊資料 */
+function writeData_(json) {
+  const current = props_().getProperty(DATA_PTR) || DATA_SHEETS[0];
+  const target = current === DATA_SHEETS[0] ? DATA_SHEETS[1] : DATA_SHEETS[0];
+  const count = writeJson_(target, json, true);
+  SpreadsheetApp.flush();
+  const sheet = spreadsheet_().getSheetByName(target);
+  const last = sheet.getRange(count, 1, 1, 1).getValues()[0][0];
+  const tail = json.slice((count - 1) * CHUNK_SIZE);
+  if (sheet.getLastRow() !== count || String(last) !== CHUNK_MARK + tail) {
+    throw appError_('WRITE_FAILED', '資料寫入不完整，這次操作沒有生效，請再試一次');
+  }
+  props_().setProperty(DATA_PTR, target);
+}
+
+function backup_(state, label) {
+  const name = BACKUP_PREFIX + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss') + (label ? '_' + label : '');
+  writeJson_(name, JSON.stringify(state), true);
+  return name;
 }
 
 // 快取目前資料版本，資料沒變時讀取不必打開試算表（快取遺失時改讀試算表）
@@ -135,14 +177,8 @@ function syncKey_(info) {
 
 function writeState_(state) {
   cache_().remove(SYNC_KEY);
-  writeJson_(DATA_SHEET, JSON.stringify(state), true);
+  writeData_(JSON.stringify(state));
   cache_().put(SYNC_KEY, syncKey_(AttendAuth.syncInfo(state)), TOKEN_TTL);
-}
-
-function backup_(state, label) {
-  const name = BACKUP_PREFIX + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss') + (label ? '_' + label : '');
-  writeJson_(name, JSON.stringify(state), true);
-  return name;
 }
 
 // ---------- 帳號 ----------
@@ -329,7 +365,14 @@ function apiImportState(token, raw) {
     return withLock_(function () {
       const loaded = AttendMigrate.loadAny(raw, { now: nowIso_ });
       loaded.state.meta.syncId = 'Y' + Utilities.getUuid(); // 整份換掉，各裝置都要重新下載
-      const backup = backup_(readState_(), 'before_import');
+      // 現有資料讀不到時（DATA_UNREADABLE）仍允許匯入，讓擁有者可以用備份檔復原
+      let current = null;
+      try {
+        current = readState_();
+      } catch (e) {
+        if (e.code !== 'DATA_UNREADABLE') throw e;
+      }
+      const backup = current ? backup_(current, 'before_import') : null;
       writeState_(loaded.state);
       return { migratedFrom: loaded.migratedFrom, report: loaded.report, backup: backup, view: 'full', state: loaded.state };
     });

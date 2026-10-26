@@ -9,6 +9,11 @@ function ok(res) {
   return JSON.parse(JSON.stringify(res));
 }
 
+// 目前使用中的資料工作表
+function dataSheet(env) {
+  return env.sheets[env.props.DATA_SHEET || '_data'];
+}
+
 function fail(res, code) {
   assert.equal(res.ok, false, '應該失敗');
   assert.equal(res.code, code, res.message);
@@ -47,7 +52,8 @@ test('登入清單只有名稱與角色，不含 PIN 資訊', () => {
 });
 
 test('壇務完整流程：建課次、建學員、點名、加分，資料寫入試算表', () => {
-  const { g, staff, classId, sheets } = setup();
+  const env = setup();
+  const { g, staff, classId } = env;
   const session = ok(g.apiApply(staff, { type: 'session.ensure', classId, date: '2026-10-24' })).result;
   const stu = ok(g.apiApply(staff, { type: 'student.create', classId, name: '王小明' })).result;
   const res = ok(g.apiApply(staff, { type: 'points.checkin', studentId: stu.id, sessionId: session.id }));
@@ -55,9 +61,9 @@ test('壇務完整流程：建課次、建學員、點名、加分，資料寫�
   const log = res.state.logs[0];
   assert.equal(log.operatorName, '壇務甲');
   // 試算表中的資料是加了標記的 JSON
-  const cell = sheets._data.cells()[0][0];
+  const cell = dataSheet(env).cells()[0][0];
   assert.equal(cell[0], '~');
-  assert.ok(sheets._data.hidden);
+  assert.ok(dataSheet(env).hidden);
   // 重新讀取仍一致
   const again = ok(g.apiGetState(staff));
   assert.equal(again.state.logs.length, 1);
@@ -137,7 +143,8 @@ test('報表工作表：學員總表包含計算後的分數', () => {
 });
 
 test('大量資料會分段存放在多個儲存格', () => {
-  const { g, owner, classId, sheets } = setup();
+  const env = setup();
+  const { g, owner, classId } = env;
   const state = ok(g.apiGetState(owner)).state;
   // 直接寫入一份大資料（約 20 萬字）再讀回
   const big = JSON.parse(JSON.stringify(state));
@@ -145,12 +152,12 @@ test('大量資料會分段存放在多個儲存格', () => {
     big.students.push({ id: 'X' + i, classId, teamId: big.classes[0].teams[0].id, name: '範例學員' + i, note: '備註'.repeat(50), deletedAt: null });
   }
   ok(g.apiImportState(owner, JSON.stringify(big)));
-  assert.ok(sheets._data.cells().length > 3);
+  assert.ok(dataSheet(env).cells().length > 3);
   assert.equal(ok(g.apiGetState(owner)).state.students.length, 1500);
 });
 
 test('增量同步：點名只回傳新增紀錄；資料沒變時不讀試算表', () => {
-  const { g, staff, classId, sheets } = setup();
+  const { g, staff, classId, sheets, props } = setup();
   const session = ok(g.apiApply(staff, { type: 'session.ensure', classId, date: '2026-10-24' })).result;
   const stu = ok(g.apiApply(staff, { type: 'student.create', classId, name: '王小明' })).result;
   let base = ok(g.apiGetState(staff, null)).state;
@@ -163,13 +170,14 @@ test('增量同步：點名只回傳新增紀錄；資料沒變時不讀試算�
   assert.deepEqual(base, ok(g.apiGetState(staff, null)).state);
 
   // 沒有變動：直接由快取判斷，不打開試算表
-  const data = sheets._data;
-  sheets._data = null;
+  const name = props.DATA_SHEET;
+  const data = sheets[name];
+  sheets[name] = null;
   const same = ok(g.apiGetState(staff, since()));
   assert.equal(same.unchanged, true);
   assert.equal(same.state, undefined);
   assert.equal(same.user.name, '壇務甲');
-  sheets._data = data;
+  sheets[name] = data;
 });
 
 test('增量同步：快取遺失時改讀試算表；匯入資料後各裝置整份重新下載', () => {
@@ -183,4 +191,88 @@ test('增量同步：快取遺失時改讀試算表；匯入資料後各裝置�
   const imported = ok(g.apiImportState(owner, backup));
   assert.notEqual(imported.state.meta.syncId, base.meta.syncId);
   assert.ok(ok(g.apiGetState(owner, since)).state);
+});
+
+// ---------- 寫入安全 ----------
+
+test('寫入安全：輪流寫兩個工作表，寫完才切換，上一版保留在另一個工作表', () => {
+  const env = setup();
+  const { g, owner, classId, sheets, props } = env;
+  const before = props.DATA_SHEET;
+  const prev = JSON.stringify(dataSheet(env).cells());
+  ok(g.apiApply(owner, { type: 'student.create', classId, name: '王小明' }));
+  assert.notEqual(props.DATA_SHEET, before);
+  assert.deepEqual(['_data', '_data_2'].sort(), [before, props.DATA_SHEET].sort());
+  assert.equal(JSON.stringify(sheets[before].cells()), prev);
+  assert.ok(sheets._data_2.hidden && sheets._data.hidden);
+});
+
+test('寫入安全：寫到一半出錯時，原本的資料不受影響，之後可以繼續操作', () => {
+  const env = setup();
+  const { g, owner, classId, sheets, props } = env;
+  ok(g.apiApply(owner, { type: 'student.create', classId, name: '王小明' }));
+  const good = ok(g.apiGetState(owner)).state;
+  const target = props.DATA_SHEET === '_data' ? '_data_2' : '_data';
+  const sheet = sheets[target];
+  const realGetRange = sheet.getRange;
+
+  // 情況一：寫入時丟出錯誤（例如逾時、試算表忙碌）
+  sheet.getRange = (...args) => Object.assign(realGetRange(...args), { setValues() { throw new Error('Service timed out'); } });
+  fail(g.apiApply(owner, { type: 'student.create', classId, name: '李小華' }), 'SERVER_ERROR');
+  assert.deepEqual(ok(g.apiGetState(owner)).state, good);
+
+  // 情況二：沒有錯誤但只寫進一部分
+  sheet.getRange = (r, c, nr, nc) => {
+    const range = realGetRange(r, c, nr, nc);
+    return Object.assign(range, { setValues: (values) => realGetRange(r, c, 1, nc).setValues(values.slice(0, 1).map((row) => [row[0].slice(0, 10)])) });
+  };
+  fail(g.apiApply(owner, { type: 'student.create', classId, name: '李小華' }), 'WRITE_FAILED');
+  assert.deepEqual(ok(g.apiGetState(owner)).state, good);
+
+  // 恢復正常後可以繼續
+  sheet.getRange = realGetRange;
+  ok(g.apiApply(owner, { type: 'student.create', classId, name: '李小華' }));
+  assert.deepEqual(ok(g.apiGetState(owner)).state.students.map((s) => s.name), ['王小明', '李小華']);
+});
+
+test('寫入安全：資料工作表被刪除或內容損壞時停止操作，不會用空白資料覆蓋', () => {
+  const env = setup();
+  const { g, owner, staff, classId, sheets, props } = env;
+  ok(g.apiApply(owner, { type: 'student.create', classId, name: '王小明' }));
+  const name = props.DATA_SHEET;
+  const saved = sheets[name];
+
+  sheets[name] = null; // 有人誤刪了工作表
+  fail(g.apiGetState(staff, null), 'DATA_UNREADABLE');
+  fail(g.apiApply(staff, { type: 'student.create', classId, name: '李小華' }), 'DATA_UNREADABLE');
+  assert.equal(props.DATA_SHEET, name); // 沒有切換、沒有寫入
+
+  sheets[name] = saved;
+  const cells = saved.cells();
+  const original = cells[0][0];
+  cells[0][0] = original.slice(0, 20); // 內容被改壞
+  fail(g.apiGetState(staff, null), 'DATA_UNREADABLE');
+  cells[0][0] = original;
+  const backup = ok(g.apiExportBackup(owner)).json;
+  assert.equal(ok(g.apiGetState(staff, null)).state.students.length, 1);
+
+  // 資料讀不到時，擁有者仍可以匯入備份檔復原
+  sheets[name] = null;
+  const restored = ok(g.apiImportState(owner, backup));
+  assert.equal(restored.backup, null);
+  assert.equal(ok(g.apiGetState(staff, null)).state.students.length, 1);
+});
+
+test('寫入安全：舊版只有 _data 工作表時照常讀取，下次寫入改用 _data_2', () => {
+  const env = setup();
+  const { g, owner, classId, sheets, props } = env;
+  // 模擬舊版：資料在 _data，沒有 DATA_SHEET 屬性
+  sheets._data = sheets[props.DATA_SHEET];
+  delete sheets._data_2;
+  delete props.DATA_SHEET;
+  delete env.cache.sync;
+  assert.equal(ok(g.apiGetState(owner, null)).state.classes.length, 1);
+  ok(g.apiApply(owner, { type: 'student.create', classId, name: '王小明' }));
+  assert.equal(props.DATA_SHEET, '_data_2');
+  assert.equal(ok(g.apiGetState(owner, null)).state.students.length, 1);
 });
