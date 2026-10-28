@@ -554,6 +554,23 @@
     return { id: r.id, created: true };
   };
 
+  /**
+   * 服務人員點名：標記某人某天有沒有來（執勤）。on 為 false 時取消。
+   * 給 date 時當天沒有課次會自動建立，點名畫面不必先等後端。
+   */
+  OPS['session.duty'] = function (state, p, ctx) {
+    const cls = mustFind(state.classes, p.classId, '班別');
+    const person = mustFind(state.staff, p.staffId, '服務人員');
+    const session = sessionOf(state, p, cls.id, ctx, true);
+    if (!session) fail('INVALID_INPUT', '請指定課次或上課日期');
+    const on = p.on !== false;
+    const ids = session.dutyStaffIds.filter(function (id) { return id !== person.id; });
+    if (on) ids.push(person.id);
+    session.dutyStaffIds = ids;
+    touch(session, ctx);
+    return { sessionId: session.id, on: on };
+  };
+
   /** 依常態時間產生一段期間的課次（已有課次的日期略過） */
   OPS['session.generate'] = function (state, p, ctx) {
     const cls = mustFind(state.classes, p.classId, '班別');

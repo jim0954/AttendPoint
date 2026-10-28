@@ -77,7 +77,7 @@ state
 | 分類 | 操作 |
 |---|---|
 | 班別 | `class.create`、`class.update`、`class.delete`、`class.restore` |
-| 課次 | `session.save`、`session.ensure`、`session.generate`（依常態時間產生課表）、`session.delete` |
+| 課次 | `session.save`、`session.ensure`、`session.generate`（依常態時間產生課表）、`session.duty`（服務人員點名：標記某人某天到或取消）、`session.delete` |
 | 服務人員 | `staff.create`、`staff.update`、`staff.delete`、`staff.restore` |
 | 學員 | `student.create`、`student.import`（批次）、`student.update`、`student.delete`、`student.restore` |
 | 積分 | `points.checkin`、`points.award`、`points.batch`、`points.redeem`、`points.adjust`、`log.reverse` |

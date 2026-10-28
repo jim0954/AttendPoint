@@ -44,6 +44,25 @@
     });
   }
 
+  /** 服務人員點名：支援這個班（或沒有指定班別）的服務人員，點一下標記當天有來 */
+  function staffDutyCard(cls, session) {
+    const list = App.staffList().filter(function (p) {
+      return !p.classIds || !p.classIds.length || p.classIds.indexOf(cls.id) !== -1;
+    });
+    const duty = session ? session.dutyStaffIds : [];
+    const present = list.filter(function (p) { return duty.indexOf(p.id) !== -1; }).length;
+    return html`
+      <div class="card card-pad stack" data-staff-duty style="margin-bottom:12px">
+        <div class="spread"><b>🙋 服務人員點名</b><span class="faint num">${present} / ${list.length} 到</span></div>
+        ${list.length
+          ? html`<div class="pills">${list.map(function (p) {
+              const on = duty.indexOf(p.id) !== -1;
+              return html`<button type="button" class="pill ${on ? 'active' : ''}" data-action="staff-duty" data-id="${p.id}" aria-pressed="${on ? 'true' : 'false'}">${on ? '✅ ' : ''}${p.name}</button>`;
+            })}</div>`
+          : html`<span class="faint">還沒有服務人員，請到「⚙️ 班務管理 → 🙋 服務人員」新增，支援班別勾選「${cls.name}」。</span>`}
+      </div>`;
+  }
+
   function studentCard(s, session) {
     const t = App.studentTotals(s.id);
     const checked = !!session && AttendStore.isCheckedIn(App.s.data, s.id, session.id);
@@ -97,6 +116,8 @@
           <div class="card stat"><div class="label">本堂加分</div><div class="value num">+${gained}</div></div>
           <div class="card stat"><div class="label">平均榮譽分</div><div class="value num">${avg}</div></div>
         </div>
+
+        ${App.isStaff() ? staffDutyCard(cls, session) : ''}
 
         <div class="toolbar">
           <input class="input" type="search" placeholder="🔍 搜尋姓名或學號" value="${App.s.search}" data-input="search" />
@@ -201,6 +222,13 @@
           App.toast('↩️ 已撤銷「' + log.reason + '」');
         });
       });
+    },
+    'staff-duty': function (el) {
+      const person = App.s.data.staff.find(function (p) { return p.id === el.dataset.id; });
+      const session = App.session();
+      const on = !(session && session.dutyStaffIds.indexOf(person.id) !== -1);
+      const p = App.run({ type: 'session.duty', classId: App.s.classId, staffId: person.id, date: App.s.date, on: on });
+      afterAccepted(p, on ? `🙋 ${person.name} 已到` : `已取消 ${person.name} 的出席`, on ? 'ok' : '');
     },
     'open-student': function (el) { App.openStudent(el.dataset.id); },
     'open-batch': function () { openBatch(); }

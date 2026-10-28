@@ -68,7 +68,7 @@
   // 加減分類的操作先在畫面上立即生效（樂觀更新），再依序送到後端；
   // 後端回應後以後端資料為準，失敗時退回並提示。
   // 會建立新資料（需要後端給的 id）的操作則等後端回應後才更新畫面。
-  const OPTIMISTIC = ['points.checkin', 'points.award', 'points.batch', 'points.redeem'];
+  const OPTIMISTIC = ['points.checkin', 'points.award', 'points.batch', 'points.redeem', 'session.duty'];
   const queue = [];
   let confirmed = null; // 最後一次後端確認的資料
   let sending = false;

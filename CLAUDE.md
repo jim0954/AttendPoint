@@ -33,5 +33,6 @@
 - 階段 5-1 部署文件補充：部署帳號的選擇、先用個人帳號試行一個班再轉移到公用帳號（`docs/deploy-gas.md` 第 0、6 節）。
 - 階段 6 試行中（擁有者個人帳號、一個班）。6-1：點名／加分改送上課日期，課次在同一個操作中建立，第一次點名不必等後端。
 - 6-2：改成與 CarTracker 相同的架構——網頁放 GitHub Pages（Actions 自動發布），Apps Script 只當後台（`doPost`），網頁比對後台版本指紋。
+- 6-3：服務人員在點名頁直接點名（`session.duty`，記入課次執勤 `dutyStaffIds`）。
 - 尚未部署到真正的 Google Apps Script 實測（階段 4 其餘測試、階段 5 GitHub 門面與部署、階段 6 佛堂試行）。
 - 根目錄 `AttendPoint.html` 是 v2 舊版，`tests/migrate-v2.test.js` 用它當移轉測試資料。

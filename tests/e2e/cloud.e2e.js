@@ -18,6 +18,7 @@ test('雲端版', { skip: SKIP }, async (t) => {
       addRules: [{ label: '準時報到', points: 10, isCheckin: true }]
     }).result;
     ['王小明', '李小華', '陳大同'].forEach((name) => apiApply(tok, { type: 'student.create', classId: cls.id, teamId: null, name }));
+    apiApply(tok, { type: 'staff.create', name: '林輔導', role: '小隊輔', classIds: [cls.id] });
     // 記錄每次讀取／寫入的回應類型（整份、只傳變動、沒有變動）
     window.__calls = [];
     ['apiApply', 'apiGetState'].forEach((name) => {
@@ -79,6 +80,26 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await tab(page, 'roster');
     assert.equal(await page.locator('[data-action="delete-student"]').count(), 0);
     await tab(page, 'checkin');
+  });
+
+  await t.test('服務人員點名：點一下立即標記到，再點一下取消', async () => {
+    const chip = page.locator('[data-staff-duty] [data-action="staff-duty"]', { hasText: '林輔導' });
+    await chip.click();
+    assert.equal(await chip.getAttribute('aria-pressed'), 'true'); // 不必等後端
+    await page.locator('[data-staff-duty]', { hasText: '1 / 1 到' }).waitFor();
+    await idle(page);
+    const dutyOnServer = () => page.evaluate(() => {
+      const st = readState_();
+      const p = st.staff.find((x) => x.name === '林輔導');
+      return AttendStore.computeStaffDuty(st)[p.id];
+    });
+    assert.equal(await dutyOnServer(), 1);
+    await chip.click();
+    await idle(page);
+    assert.equal(await chip.getAttribute('aria-pressed'), 'false');
+    assert.equal(await dutyOnServer(), 0);
+    await chip.click(); // 留下「到」，後面的步驟不受影響
+    await idle(page);
   });
 
   await t.test('多裝置：別台點名後，這台重新整理只下載變動', async () => {
