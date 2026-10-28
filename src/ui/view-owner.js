@@ -251,6 +251,16 @@
       </div>
 
       <div class="card card-pad stack" style="margin-top:12px">
+        <b>🖼️ LOGO</b>
+        <span class="hint">顯示在標題左邊、瀏覽器分頁與手機主畫面圖示。圖片存在${gas ? '後台試算表' : '這台電腦的瀏覽器'}，不會放進程式碼。</span>
+        <div class="row">
+          ${App.$('#brandLogo').hidden ? html`<span class="faint">目前沒有 LOGO</span>` : html`<img src="${App.$('#brandLogo').src}" alt="目前的 LOGO" style="width:64px;height:64px;border-radius:50%;border:1px solid var(--line)" />`}
+          <label class="btn">📤 上傳圖片…<input type="file" accept="image/png,image/jpeg,image/webp" data-change="upload-logo" hidden /></label>
+          ${App.$('#brandLogo').hidden ? '' : html`<button type="button" class="btn" data-action="remove-logo">移除</button>`}
+        </div>
+      </div>
+
+      <div class="card card-pad stack" style="margin-top:12px">
         <b>💾 備份與匯入</b>
         <span class="hint">備份檔包含所有班別、學員、課次、服務人員與流水帳（不含帳號與 PIN）。建議每月下載一次。</span>
         <div class="btn-row">
@@ -272,7 +282,28 @@
       </div>`;
   }
 
+  function saveLogo(logo, message) {
+    return App.s.backend.setLogo(logo).then(function (saved) {
+      App.showLogo(saved);
+      App.render();
+      App.toast(message, 'ok');
+    }, App.handleError);
+  }
+
   Object.assign(App.actions, {
+    'upload-logo': function (el) {
+      const file = el.files && el.files[0];
+      el.value = '';
+      if (!file) return;
+      App.resizeLogo(file).then(function (logo) {
+        return saveLogo(logo, '🖼️ 已更新 LOGO');
+      }, App.handleError);
+    },
+    'remove-logo': function () {
+      App.confirm('確定要移除 LOGO 嗎？', { okLabel: '移除' }).then(function (yes) {
+        if (yes) saveLogo('', '已移除 LOGO');
+      });
+    },
     'save-meta': function () {
       const f = App.formData(App.$('[data-meta-form]'));
       App.run({ type: 'meta.update', templeTitle: f.templeTitle, yearLabel: f.yearLabel }).then(function () { App.toast('已儲存', 'ok'); });

@@ -43,7 +43,8 @@ function doGet() {
 // 網頁可以呼叫的 API（其他函式一律拒絕）
 const API_FUNCTIONS = [
   'apiLoginOptions', 'apiLogin', 'apiLogout', 'apiGetState', 'apiApply',
-  'apiListUsers', 'apiUserOp', 'apiExportBackup', 'apiImportState', 'apiRebuildReports'
+  'apiListUsers', 'apiUserOp', 'apiExportBackup', 'apiImportState', 'apiRebuildReports',
+  'apiGetLogo', 'apiSetLogo'
 ];
 
 /**
@@ -445,6 +446,36 @@ function apiRebuildReports(token) {
     const user = requireUser_(token);
     if (user.role !== 'owner') throw appError_('FORBIDDEN', '更新報表僅限擁有者操作');
     return { sheets: rebuildReportSheets() };
+  });
+}
+
+// ---------- LOGO ----------
+// LOGO 圖檔不放進程式碼（GitHub 公開），由擁有者從網頁上傳，存在試算表隱藏的 _logo 工作表
+
+const LOGO_SHEET = '_logo';
+const LOGO_MAX_CHARS = 200000;
+const LOGO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/;
+
+/** 所有人：讀取 LOGO（data URI；沒有設定時為空字串） */
+function apiGetLogo() {
+  return respond_(function () {
+    return { logo: readJson_(LOGO_SHEET).trim() }; // 移除時存的是一個空白
+  });
+}
+
+/** 擁有者：上傳 LOGO（data URI），傳空字串為移除 */
+function apiSetLogo(token, logo) {
+  return respond_(function () {
+    const user = requireUser_(token);
+    if (user.role !== 'owner') throw appError_('FORBIDDEN', '設定 LOGO 僅限擁有者操作');
+    const value = String(logo || '');
+    if (value && (value.length > LOGO_MAX_CHARS || !LOGO_RE.test(value))) {
+      throw appError_('INVALID_INPUT', 'LOGO 需為 PNG、JPEG 或 WebP 圖片，且不超過 150 KB');
+    }
+    return withLock_(function () {
+      writeJson_(LOGO_SHEET, value || ' ', true);
+      return { logo: value };
+    });
   });
 }
 

@@ -184,6 +184,75 @@
     if (view && !AttendAuth.atLeast(user, view.minRole || 'viewer')) App.s.tab = 'checkin';
   };
 
+  // ---------- LOGO ----------
+  // LOGO 不放在程式碼裡：由擁有者上傳存在後台，這台裝置記住上次的 LOGO，開啟時先顯示
+  const LOGO_CACHE = 'attendpoint_logo';
+  let defaultFavicon = null;
+
+  App.showLogo = function (logo) {
+    const img = App.$('#brandLogo');
+    const favicon = App.$('#favicon');
+    if (defaultFavicon === null) defaultFavicon = favicon.getAttribute('href');
+    img.hidden = !logo;
+    App.$('#brandMark').hidden = !!logo;
+    if (logo) img.src = logo;
+    else img.removeAttribute('src');
+    favicon.setAttribute('href', logo || defaultFavicon);
+    // 加到手機主畫面時使用的圖示
+    let touch = App.$('link[rel="apple-touch-icon"]');
+    if (logo && !touch) {
+      touch = document.createElement('link');
+      touch.rel = 'apple-touch-icon';
+      document.head.appendChild(touch);
+    }
+    if (touch) {
+      if (logo) touch.href = logo;
+      else touch.remove();
+    }
+    try {
+      if (logo) localStorage.setItem(LOGO_CACHE, logo);
+      else localStorage.removeItem(LOGO_CACHE);
+    } catch (e) { /* 無法記住也沒關係，下次再向後台讀取 */ }
+  };
+
+  /** 開啟時：先顯示記住的 LOGO，再向後台確認有沒有更新 */
+  App.loadLogo = function () {
+    let cached = '';
+    try { cached = localStorage.getItem(LOGO_CACHE) || ''; } catch (e) {}
+    App.showLogo(cached);
+    return App.s.backend.getLogo().then(function (logo) {
+      if (logo !== cached) App.showLogo(logo);
+    }, function () { /* 讀不到就維持原樣 */ });
+  };
+
+  /** 把使用者選的圖片縮成 180×180 的方形 PNG（白底、完整顯示不裁切） */
+  App.resizeLogo = function (file) {
+    return new Promise(function (resolve, reject) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = function () {
+        const size = 180;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, size, size);
+        const scale = (size * 0.92) / Math.max(img.width, img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new App.BackendError('INVALID_INPUT', '無法讀取這個圖片檔'));
+      };
+      img.src = url;
+    });
+  };
+
   // ---------- 外框 ----------
 
   function renderHeader() {

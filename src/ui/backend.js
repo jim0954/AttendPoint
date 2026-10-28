@@ -131,6 +131,12 @@
     return this.call('apiImportState', this.token, raw).then(function (res) { return self.keep(res); });
   };
   GasBackend.prototype.rebuildReports = function () { return this.call('apiRebuildReports', this.token); };
+  GasBackend.prototype.getLogo = function () {
+    return this.call('apiGetLogo').then(function (res) { return res.logo; });
+  };
+  GasBackend.prototype.setLogo = function (logo) {
+    return this.call('apiSetLogo', this.token, logo).then(function (res) { return res.logo; });
+  };
 
   // ---------- 單機版（瀏覽器 localStorage） ----------
 
@@ -139,6 +145,7 @@
     users: 'attendpoint_v3_users',
     owner: 'attendpoint_v3_owner',
     backup: 'attendpoint_v3_backup',
+    logo: 'attendpoint_v3_logo',
     session: 'attendpoint_v3_session'
   };
   const OWNER_ID = 'U-owner';
@@ -353,6 +360,23 @@
       writeJson(KEYS.backup, this.readState());
       writeJson(KEYS.data, loaded.state);
       return { migratedFrom: loaded.migratedFrom, report: loaded.report, backup: '瀏覽器備份', state: loaded.state };
+    });
+  };
+
+  LocalBackend.prototype.getLogo = function () {
+    return this.run(function () { return localStorage.getItem(KEYS.logo) || ''; });
+  };
+
+  LocalBackend.prototype.setLogo = function (logo) {
+    return this.run(function () {
+      this.requireOwner();
+      try {
+        if (logo) localStorage.setItem(KEYS.logo, logo);
+        else localStorage.removeItem(KEYS.logo);
+      } catch (e) {
+        throw new BackendError('STORAGE_FULL', '瀏覽器儲存空間不足，無法儲存 LOGO');
+      }
+      return logo;
     });
   };
 

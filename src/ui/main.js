@@ -11,6 +11,7 @@
     App.render();
     App.$('#syncStatus').textContent = '讀取資料中…';
 
+    App.loadLogo();
     App.s.backend.init().then(function (res) {
       App.loadData(res.state);
       App.s.user = res.user || null;

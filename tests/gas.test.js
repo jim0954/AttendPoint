@@ -369,3 +369,29 @@ test('doPost：只能呼叫網頁 API，格式錯誤時回傳錯誤而不是丟�
   assert.equal(JSON.parse(g.doPost(undefined).getContent()).code, 'INVALID_OP');
   assert.match(g.doGet().getContent(), /AttendPoint 後台運作中/);
 });
+
+// ---------- LOGO ----------
+
+const PNG_1PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('LOGO：擁有者上傳後所有人（含訪客）都讀得到，可以移除', () => {
+  const { g, owner, staff, sheets } = setup();
+  assert.equal(ok(g.apiGetLogo()).logo, '');
+  fail(g.apiSetLogo(staff, PNG_1PX), 'FORBIDDEN');
+  fail(g.apiSetLogo(null, PNG_1PX), 'FORBIDDEN');
+  ok(g.apiSetLogo(owner, PNG_1PX));
+  assert.equal(ok(g.apiGetLogo()).logo, PNG_1PX);
+  assert.ok(sheets._logo.hidden);
+  ok(g.apiSetLogo(owner, ''));
+  assert.equal(ok(g.apiGetLogo()).logo, '');
+});
+
+test('LOGO：只接受圖片 data URI，太大會拒絕；大圖分段存放', () => {
+  const { g, owner } = setup();
+  fail(g.apiSetLogo(owner, 'https://example.com/logo.png'), 'INVALID_INPUT');
+  fail(g.apiSetLogo(owner, 'data:image/svg+xml;base64,PHN2Zz4='), 'INVALID_INPUT');
+  fail(g.apiSetLogo(owner, 'data:image/png;base64,' + 'A'.repeat(200001)), 'INVALID_INPUT');
+  const big = 'data:image/png;base64,' + 'A'.repeat(120000);
+  ok(g.apiSetLogo(owner, big));
+  assert.equal(ok(g.apiGetLogo()).logo, big);
+});

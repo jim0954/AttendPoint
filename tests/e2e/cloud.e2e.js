@@ -3,7 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { SKIP, launch, idle, dialog, modal, toast, tab, card, login, logout } = require('./helpers.js');
 
-const OWNER_PIN = '246810'; // scripts/gas-sim.js 的模擬擁有者 PIN
+const OWNER_PIN = '246810';
+// 4×4 紅色 PNG，測試上傳 LOGO 用
+const PNG_4PX = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEklEQVR4nGP4z8CAB+GTG8HSALfKY52fTcuYAAAAAElFTkSuQmCC'; // scripts/gas-sim.js 的模擬擁有者 PIN
 
 test('雲端版', { skip: SKIP }, async (t) => {
   const env = await launch();
@@ -54,7 +56,19 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await m.locator('[name=pin]').fill('1357');
     await m.locator('button[type=submit]').click();
     await toast(page, '已建立帳號「壇務甲」');
+
+    // LOGO：從「系統與備份」上傳，存在後台（不放在程式碼裡）
+    assert.equal(await page.locator('#brandLogo').isVisible(), false);
+    await page.click('#view [data-action="owner-section"][data-id="system"]');
+    await page.locator('input[data-change="upload-logo"]').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(PNG_4PX, 'base64') });
+    await toast(page, '已更新 LOGO');
+    assert.equal(await page.locator('#brandLogo').isVisible(), true);
+    assert.equal(await page.locator('#brandMark').isVisible(), false);
+    const saved = await page.evaluate(() => apiGetLogo().logo);
+    assert.match(saved, /^data:image\/png;base64,/);
+    assert.equal(await page.locator('#favicon').getAttribute('href'), saved);
     await logout(page);
+    assert.equal(await page.locator('#brandLogo').isVisible(), true); // 訪客也看得到
   });
 
   await t.test('壇務：可以點名，不能刪除、看不到擁有者後台', async () => {
