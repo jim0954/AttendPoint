@@ -8,5 +8,5 @@
  * 在 GitHub 網站上直接編輯這個檔案並儲存（commit）後，幾分鐘內網頁就會更新。
  */
 window.ATTENDPOINT_CONFIG = {
-  GAS_URL: ''
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbyi1h3V0weB8BzqgF122btUMMJs68rvH9zXA0H1dX_3fBQgxFNkTC-YVVt_ccDGNdyQ/exec'
 };
