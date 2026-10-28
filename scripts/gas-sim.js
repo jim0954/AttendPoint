@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
- * 開發用：產生 dist/gas-sim.html，在瀏覽器中模擬 Google Apps Script 環境，
- * 不用部署就能測試雲端版的完整流程（google.script.run → Code.js → 試算表）。
+ * 開發用：產生 dist/gas-sim.html，在瀏覽器中模擬 Google Apps Script 後台，
+ * 不用部署就能測試雲端版的完整流程（網頁 fetch → Code.js doPost → 試算表）。
  *
  *   npm run build && node scripts/gas-sim.js
  *   然後用本機伺服器開啟 dist/gas-sim.html（擁有者 PIN：OWNER_PIN 預設 246810）
@@ -71,33 +71,29 @@ const mocks = `
       return fmt === 'yyyyMMdd_HHmmss' ? iso.replace(/[-:]/g, '').replace('T', '_') : iso;
     }
   };
-  // google.script.run：非同步呼叫全域 api 函式，參數與回傳值都經過 JSON 序列化
-  function runner(ok, fail) {
-    return new Proxy({}, {
-      get: function (_, name) {
-        if (name === 'withSuccessHandler') return function (fn) { return runner(fn, fail); };
-        if (name === 'withFailureHandler') return function (fn) { return runner(ok, fn); };
-        return function () {
-          const args = JSON.parse(JSON.stringify(Array.prototype.slice.call(arguments)));
-          setTimeout(function () {
-            try {
-              const res = JSON.parse(JSON.stringify(window[name].apply(null, args)));
-              if (ok) ok(res);
-            } catch (e) {
-              console.error(e);
-              if (fail) fail(e);
-            }
-          }, 300);
-        };
-      }
+  window.ContentService = {
+    MimeType: { JSON: 'json' },
+    createTextOutput: function (text) { return { getContent: function () { return text; }, setMimeType: function () { return this; } }; }
+  };
+  // 網頁以 fetch POST 呼叫後台：攔截模擬網址，交給 Code.js 的 doPost
+  const SIM_URL = 'https://script.google.com/macros/s/gas-sim/exec';
+  window.ATTENDPOINT_CONFIG.GAS_URL = SIM_URL;
+  const realFetch = window.fetch;
+  window.fetch = function (url, opts) {
+    if (url !== SIM_URL) return realFetch.apply(this, arguments);
+    const body = opts.body;
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        const text = doPost({ postData: { contents: body } }).getContent();
+        resolve({ ok: true, status: 200, json: function () { return Promise.resolve(JSON.parse(text)); } });
+      }, 300);
     });
-  }
-  window.google = { script: { run: runner(null, null) } };
+  };
 })();
 </script>`;
 
 function main() {
-  const index = fs.readFileSync(path.join(DIST, 'gas', 'Index.html'), 'utf8');
+  const index = fs.readFileSync(path.join(DIST, 'web', 'index.html'), 'utf8');
   const code = fs.readFileSync(path.join(DIST, 'gas', 'Code.js'), 'utf8');
   // 模擬服務要在前端程式之前定義；Code.js 放最後（它在呼叫時才用到 AttendStore 等全域物件）
   const out = index

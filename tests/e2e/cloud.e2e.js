@@ -133,6 +133,26 @@ test('雲端版', { skip: SKIP }, async (t) => {
     assert.equal(await modal(page).count(), 0);
   });
 
+  await t.test('後台版本不同時提示擁有者更新；後台設定錯誤時提示原因', async () => {
+    await page.evaluate(() => { window.__realVersion = ATTENDPOINT_CONFIG.BACKEND_VERSION; ATTENDPOINT_CONFIG.BACKEND_VERSION = 'old-page'; });
+    await page.click('[data-action="refresh"]');
+    await page.locator('#modeBanner', { hasText: '後台程式需要更新' }).waitFor();
+    await page.evaluate(() => { ATTENDPOINT_CONFIG.BACKEND_VERSION = window.__realVersion; });
+    await page.click('[data-action="refresh"]');
+    await page.waitForFunction(() => !document.querySelector('#modeBanner').textContent.includes('後台程式需要更新'));
+
+    // Apps Script 存取權沒設成「所有人」時，Google 會回登入頁（不是 JSON）
+    await page.evaluate(() => {
+      const fetch0 = window.fetch;
+      window.fetch = function () {
+        window.fetch = fetch0;
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.reject(new SyntaxError('Unexpected token <')) });
+      };
+    });
+    await page.click('[data-action="refresh"]');
+    await toast(page, '確認 Apps Script 部署的存取權為「所有人」');
+  });
+
   await t.test('沒有程式錯誤', () => {
     assert.deepEqual(page.errors, []);
   });

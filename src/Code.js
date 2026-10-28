@@ -1,8 +1,9 @@
 /*
  * AttendPoint：Google Apps Script 後端
  *
- * 同一個 GAS 專案內需包含：store.js、auth.js、migrate-v2.js、Code.js（依此順序載入）與 Index.html。
+ * 同一個 GAS 專案內需包含：store.js、auth.js、migrate-v2.js、Code.js（依此順序載入）。
  * 請用 npm run build 產生 dist/gas/，再整個資料夾推送（clasp push）或複製。
+ * 網頁放在 GitHub Pages，以 fetch POST 呼叫這裡的 doPost（見 src/ui/backend.js）。
  *
  * Script Properties（專案設定 → 指令碼屬性）：
  *   OWNER_PIN       擁有者主帳號的 PIN（4–8 位數字，必填）
@@ -28,14 +29,41 @@ const LOCK_WAIT_MS = 15000;
 const MAX_FAILS = 5;
 const FAIL_WINDOW = 15 * 60;
 const OWNER_ID = 'U-owner';
+// 後台程式版本：npm run build 時換成 store／auth／migrate-v2／Code 的指紋，
+// 網頁比對不同時會提示擁有者更新 Apps Script
+const BACKEND_VERSION = '@BACKEND_VERSION@';
 
-// ---------- 網頁 ----------
+// ---------- 網頁呼叫的入口 ----------
 
-// Index.html 由 npm run build 產生（已內嵌所有前端程式），不使用 GAS 樣板語法
+// 開啟網址只顯示說明；網頁在 GitHub Pages，資料透過 doPost 存取
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('佛堂點名加分系統')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  return ContentService.createTextOutput('AttendPoint 後台運作中（版本 ' + BACKEND_VERSION + '）。請使用佛堂點名系統的網頁網址。');
+}
+
+// 網頁可以呼叫的 API（其他函式一律拒絕）
+const API_FUNCTIONS = [
+  'apiLoginOptions', 'apiLogin', 'apiLogout', 'apiGetState', 'apiApply',
+  'apiListUsers', 'apiUserOp', 'apiExportBackup', 'apiImportState', 'apiRebuildReports'
+];
+
+/**
+ * 網頁以 fetch POST 純文字 JSON { fn, args } 呼叫（text/plain 屬於簡單請求，不會觸發 CORS 預檢），
+ * 回傳 JSON：api* 函式的結果，或 { ok: false, code, message }。
+ */
+function doPost(e) {
+  let res;
+  try {
+    const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (API_FUNCTIONS.indexOf(req.fn) === -1) {
+      res = { ok: false, code: 'INVALID_OP', message: '不支援的操作' };
+    } else {
+      res = globalThis[req.fn].apply(null, Array.isArray(req.args) ? req.args : []);
+    }
+  } catch (err) {
+    res = { ok: false, code: 'INVALID_OP', message: '請求格式錯誤' };
+  }
+  res.backendVersion = BACKEND_VERSION;
+  return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function onOpen() {

@@ -73,7 +73,10 @@ function createGas(propsInit) {
         return iso.slice(0, 19);
       }
     },
-    HtmlService: {}
+    ContentService: {
+      MimeType: { JSON: 'json' },
+      createTextOutput: (text) => ({ getContent: () => text, setMimeType() { return this; } })
+    }
   };
   vm.createContext(context);
   LOAD_ORDER.forEach((f) => vm.runInContext(fs.readFileSync(path.join(SRC, f), 'utf8'), context, { filename: f }));

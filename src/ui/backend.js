@@ -1,6 +1,6 @@
 /*
  * 後端介接：同一套介面，兩種實作
- *   GasBackend   部署在 Google Apps Script 時，呼叫 Code.js 的 api* 函式
+ *   GasBackend   雲端版：以 fetch POST 呼叫 Google Apps Script 後台（Code.js 的 doPost → api* 函式）
  *   LocalBackend 單機版，資料存在這台電腦的瀏覽器（localStorage），規則與雲端版完全相同
  *
  * 所有方法都回傳 Promise；失敗時 reject BackendError { code, message }。
@@ -31,17 +31,31 @@
     try { this.token = localStorage.getItem('attendpoint_token'); } catch (e) {}
   }
 
+  // 以 text/plain 送出 JSON，屬於「簡單請求」，不會觸發 CORS 預檢
   GasBackend.prototype.call = function (name) {
     const args = Array.prototype.slice.call(arguments, 1);
-    return new Promise(function (resolve, reject) {
-      google.script.run
-        .withSuccessHandler(function (res) {
-          if (res && res.ok) resolve(res);
-          else reject(new BackendError(res ? res.code : 'SERVER_ERROR', res ? res.message : '伺服器沒有回應'));
-        })
-        .withFailureHandler(function () {
-          reject(new BackendError('NETWORK', '連線失敗，請檢查網路後再試'));
-        })[name].apply(null, args);
+    const config = window.ATTENDPOINT_CONFIG;
+    return fetch(config.GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ fn: name, args: args })
+    }).then(function (r) {
+      if (!r.ok) throw new BackendError('NETWORK', '伺服器回應錯誤（' + r.status + '），請稍後再試');
+      return r.json().catch(function () {
+        // 回傳的不是 JSON：通常是 Apps Script 部署的存取權不是「所有人」，被導到 Google 登入頁
+        throw new BackendError('BAD_RESPONSE', '後台沒有回應正確資料，請擁有者確認 Apps Script 部署的存取權為「所有人」');
+      });
+    }, function () {
+      throw new BackendError('NETWORK', '連線失敗，請檢查網路後再試');
+    }).then(function (res) {
+      // 後台程式版本與網頁不同：提示擁有者更新 Apps Script
+      const outdated = res.backendVersion !== config.BACKEND_VERSION;
+      if (outdated !== App.s.backendOutdated) {
+        App.s.backendOutdated = outdated;
+        App.render();
+      }
+      if (res && res.ok) return res;
+      throw new BackendError(res ? res.code : 'SERVER_ERROR', res ? res.message : '伺服器沒有回應');
     });
   };
 
@@ -346,8 +360,9 @@
     return Promise.reject(new BackendError('UNSUPPORTED', '單機版沒有試算表報表，請改用「匯出 CSV」'));
   };
 
+  /** src/config.js 有設定後台網址就用雲端版，否則為單機版 */
   App.createBackend = function () {
-    const inGas = typeof google !== 'undefined' && google.script && google.script.run;
-    return inGas ? new GasBackend() : new LocalBackend();
+    const config = window.ATTENDPOINT_CONFIG || {};
+    return config.GAS_URL ? new GasBackend() : new LocalBackend();
   };
 })(window.App = window.App || {});

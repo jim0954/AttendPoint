@@ -180,7 +180,7 @@ function measure(sc, outDir) {
   const apply = median(() => {
     const res = g.apiApply(token, checkinOp(), Auth.sinceOf(base, 'full'));
     if (!res.ok) throw new Error(res.code + ' ' + res.message);
-    const wire = JSON.stringify(res); // google.script.run 會把回傳值序列化傳回瀏覽器
+    const wire = JSON.stringify(res); // 後台以 JSON 傳回瀏覽器
     base = Auth.mergeView(base, JSON.parse(wire));
     return wire;
   });

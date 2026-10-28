@@ -1,6 +1,6 @@
 # AttendPoint 佛堂點名加分系統
 
-佛堂班程使用的報到、加減分、換禮系統，可以單機離線使用，也可以部署到 Google Apps Script，讓多位服務人員一起使用。
+佛堂班程使用的報到、加減分、換禮系統。網頁放在 GitHub Pages，資料存在 Google 試算表（由 Google Apps Script 後台讀寫），多位服務人員可以用手機一起點名；也可以單機離線使用。
 
 ## 功能
 
@@ -10,24 +10,24 @@
 - **學員名冊**：新增、編輯、換隊升班、CSV／Excel／LINE 貼上批次匯入、匯出報表
 - **班務管理**：動態班別、小隊、加扣分項目、常態上課時間、課次與執勤、服務人員護持統計
 - **三級權限**：訪客（唯讀、名字遮蔽）／壇務（不能刪除）／擁有者（全部），由後端檢查
-- **兩種用法**：單機版（一個 HTML 檔，資料存在瀏覽器）或部署到 Google Apps Script 多人共用
+- **兩種用法**：雲端版（GitHub Pages 網頁 + Google Apps Script 後台，多人共用）或單機版（一個 HTML 檔，資料存在瀏覽器）
 
 ## 使用方式
 
-需要 Node.js 18 以上，不需安裝任何套件：
+需要 Node.js 18 以上（執行 `npm test` 需要 22 以上），不需安裝任何套件：
 
 ```bash
 npm run build
 ```
 
+- 雲端版：依照 [docs/deploy-gas.md](docs/deploy-gas.md) 部署後台（`dist/gas/`）並開啟 GitHub Pages；網頁在推送到 `main` 時自動發布
 - 單機版：用瀏覽器開啟 `dist/AttendPoint.html`
-- 雲端版：依照 [docs/deploy-gas.md](docs/deploy-gas.md) 部署 `dist/gas/`
 
 ## 文件
 
 - [資料結構](docs/data-model.md)
 - [權限與帳號](docs/permissions.md)
-- [部署到 Google Apps Script](docs/deploy-gas.md)
+- [部署（GitHub Pages + Google Apps Script）](docs/deploy-gas.md)
 - [壓力測試](docs/stress-test.md)
 
 ## 開發
@@ -67,9 +67,11 @@ npm run e2e
 | `src/store.js` | 資料層（前後端共用） |
 | `src/auth.js` | 權限規則（前後端共用） |
 | `src/migrate-v2.js` | v2 資料移轉 |
-| `src/Code.js` | Google Apps Script 後端 |
+| `src/Code.js` | Google Apps Script 後台（`doPost` 提供網頁呼叫的 API） |
+| `src/config.js` | 雲端版設定：後台網址 `GAS_URL` |
 | `src/ui/` | 網頁介面 |
-| `scripts/build.js` | 產生 `dist/` |
+| `scripts/build.js` | 產生 `dist/`（單機版、`dist/web/` GitHub Pages 網頁、`dist/gas/` 後台） |
+| `.github/workflows/pages.yml` | 推送到 `main` 時測試、建置並發布網頁 |
 | `tests/` | 單元測試（`npm test`）；`tests/e2e/` 瀏覽器自動化測試（`npm run e2e`） |
 | `AttendPoint.html` | v2 舊版（保留作為移轉測試資料） |
 

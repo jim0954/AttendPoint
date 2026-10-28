@@ -15,7 +15,8 @@
     teamFilter: 'all',
     statusFilter: 'all',
     search: '',
-    pending: 0
+    pending: 0,
+    backendOutdated: false // 雲端版：後台程式版本與網頁不同
   };
 
   // ---------- 角色 ----------
@@ -200,6 +201,7 @@
     const banner = [];
     if (!u) banner.push('👀 訪客模式：只能查看，學員名字已遮蔽。服務人員請點右上角登入');
     if (App.s.backend.mode === 'local') banner.push('💻 單機版：資料只存在這台電腦的瀏覽器');
+    if (App.s.backendOutdated) banner.unshift('⚠️ 後台程式需要更新：請擁有者依部署說明更新 Apps Script（npm run build → clasp push → 發布新版本）');
     App.$('#modeBanner').textContent = banner.join('　');
     App.$('#syncStatus').textContent = App.s.pending ? '⏳ 同步中（' + App.s.pending + '）…' : '';
   }

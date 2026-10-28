@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createGas } = require('../scripts/gas-mock.js');
 
-// google.script.run 傳回前端時會序列化，這裡用 JSON 模擬
+// 後台回應以 JSON 傳給網頁，這裡用 JSON 模擬
 function ok(res) {
   assert.equal(res.ok, true, `${res.code}: ${res.message}`);
   return JSON.parse(JSON.stringify(res));
@@ -339,4 +339,33 @@ test('備份清理：清理失敗不影響跨年度結算', () => {
   assert.equal(errors.length, 1); // 清理失敗有記錄下來
   assert.equal(ok(g.apiGetState(owner, null)).state.meta.yearLabel, '2027 年度');
   assert.ok(backupNames(sheets).length >= 1);
+});
+
+// ---------- 網頁呼叫入口（doPost） ----------
+
+function post(g, fn, ...args) {
+  const out = g.doPost({ postData: { contents: JSON.stringify({ fn, args }) } });
+  return JSON.parse(out.getContent());
+}
+
+test('doPost：網頁以 JSON 呼叫 api 函式，回應附上後台版本', () => {
+  const { g } = setup();
+  const login = post(g, 'apiLogin', 'U-owner', '246810');
+  assert.equal(login.ok, true);
+  assert.equal(login.backendVersion, '@BACKEND_VERSION@'); // 建置時才會換成指紋
+  const state = post(g, 'apiGetState', login.token, null);
+  assert.equal(state.ok, true);
+  assert.equal(state.state.classes.length, 1);
+  assert.equal(post(g, 'apiApply', null, { type: 'student.create' }).code, 'FORBIDDEN');
+});
+
+test('doPost：只能呼叫網頁 API，格式錯誤時回傳錯誤而不是丟出例外', () => {
+  const { g, props } = setup();
+  assert.equal(post(g, 'readState_').code, 'INVALID_OP');
+  assert.equal(post(g, 'saveUsers_', []).code, 'INVALID_OP');
+  assert.ok(props.USERS.includes('壇務甲')); // 沒有被清掉
+  const bad = JSON.parse(g.doPost({ postData: { contents: 'not json' } }).getContent());
+  assert.equal(bad.code, 'INVALID_OP');
+  assert.equal(JSON.parse(g.doPost(undefined).getContent()).code, 'INVALID_OP');
+  assert.match(g.doGet().getContent(), /AttendPoint 後台運作中/);
 });
