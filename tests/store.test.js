@@ -384,7 +384,7 @@ test('兌換給上課日期時只對應既有課次，不會建立課次', () =>
 
 test('服務人員點名：依日期標記到與取消，計入護持堂數', () => {
   const t = setup();
-  const p = t.run({ type: 'staff.create', name: '輔導甲', role: '小隊輔', classIds: [t.classId] });
+  const p = t.run({ type: 'staff.create', name: '輔導甲', role: '護持壇務', classIds: [t.classId] });
   const day = '2026-11-07';
   const r = t.run({ type: 'session.duty', classId: t.classId, staffId: p.id, date: day });
   const session = Store.findSession(t.state, t.classId, day);

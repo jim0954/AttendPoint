@@ -4,7 +4,7 @@
   const html = App.html;
 
   const THEMES = [['amber', '琥珀'], ['emerald', '翠綠'], ['sky', '天藍'], ['rose', '玫瑰'], ['violet', '紫羅蘭'], ['stone', '石墨']];
-  const ROLES = ['班負責', '講師', '帶讀老師', '小隊輔', '音控', '接待', '行政', '炊事'];
+  const ROLES = ['點傳師', '主壇務', '副主壇務', '護持壇務'];
   const SECTIONS = [['classes', '🏫 班別設定'], ['sessions', '🗓️ 課次與執勤'], ['staff', '🙋 服務人員']];
 
   App.s.manageSection = 'classes';
@@ -430,8 +430,11 @@
           <form class="form-grid">
             <div class="field"><label>姓名</label><input class="input" name="name" value="${p ? p.name : ''}" maxlength="20" autofocus /></div>
             <div class="field"><label>職務</label>
-              <input class="input" name="role" list="roleList" value="${p ? p.role : ''}" maxlength="20" />
-              <datalist id="roleList">${ROLES.map(function (r) { return html`<option value="${r}"></option>`; })}</datalist>
+              <select class="select" name="role">
+                <option value="" ${p && p.role ? '' : 'selected'}>（未填）</option>
+                ${ROLES.map(function (r) { return html`<option value="${r}" ${p && p.role === r ? 'selected' : ''}>${r}</option>`; })}
+                ${p && p.role && ROLES.indexOf(p.role) === -1 ? html`<option value="${p.role}" selected>${p.role}（舊）</option>` : ''}
+              </select>
             </div>
             <div class="field full"><span class="label">所屬班別（都不勾 = 跨班支援）</span>
               <div class="row">${App.classes().map(function (c) {

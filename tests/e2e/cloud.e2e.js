@@ -20,7 +20,7 @@ test('雲端版', { skip: SKIP }, async (t) => {
       addRules: [{ label: '準時報到', points: 10, isCheckin: true }]
     }).result;
     ['王小明', '李小華', '陳大同'].forEach((name) => apiApply(tok, { type: 'student.create', classId: cls.id, teamId: null, name }));
-    apiApply(tok, { type: 'staff.create', name: '林輔導', role: '小隊輔', classIds: [cls.id] });
+    apiApply(tok, { type: 'staff.create', name: '林輔導', role: '護持壇務', classIds: [cls.id] });
     // 記錄每次讀取／寫入的回應類型（整份、只傳變動、沒有變動）
     window.__calls = [];
     ['apiApply', 'apiGetState'].forEach((name) => {

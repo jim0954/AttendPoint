@@ -125,6 +125,21 @@ test('單機版', { skip: SKIP }, async (t) => {
     assert.equal(await page.locator('#view img').count(), 0);
   });
 
+  await t.test('服務人員：職務從四個選項中選擇', async () => {
+    await tab(page, 'manage');
+    await page.click('#view [data-action="manage-section"][data-id="staff"]');
+    await page.click('#view .toolbar [data-action="edit-staff"]');
+    const m = await dialog(page);
+    const options = await m.locator('[name=role] option').allTextContents();
+    assert.deepEqual(options, ['（未填）', '點傳師', '主壇務', '副主壇務', '護持壇務']);
+    await m.locator('[name=name]').fill('林道長');
+    await m.locator('[name=role]').selectOption('主壇務');
+    await m.locator('button[type=submit]').click();
+    await idle(page);
+    await page.locator('#view .chip', { hasText: '主壇務' }).waitFor();
+    assert.equal(await page.evaluate(() => App.s.data.staff.find((p) => p.name === '林道長').role), '主壇務');
+  });
+
   await t.test('沒有程式錯誤', () => {
     assert.deepEqual(page.errors, []);
   });
