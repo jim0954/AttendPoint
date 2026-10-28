@@ -169,20 +169,17 @@
     checkin: function (el) {
       const s = App.studentById(el.dataset.id);
       el.disabled = true;
-      App.ensureSession().then(function (sessionId) {
-        const p = App.run({ type: 'points.checkin', studentId: s.id, sessionId: sessionId });
-        afterAccepted(p, `🎉 ${s.name} 報到成功！`, 'ok');
-      });
+      // 只送上課日期：當天還沒有課次時由同一個操作建立，畫面不必先等後端
+      const p = App.run({ type: 'points.checkin', studentId: s.id, date: App.s.date });
+      afterAccepted(p, `🎉 ${s.name} 報到成功！`, 'ok');
     },
     'award-rule': function (el) {
       const s = App.studentById(el.dataset.id);
       const rule = el.dataset.rule;
       const label = el.dataset.label;
       const points = Number(el.dataset.points);
-      App.ensureSession().then(function (sessionId) {
-        const p = App.run({ type: 'points.award', studentId: s.id, sessionId: sessionId, ruleId: rule });
-        afterAccepted(p, points > 0 ? `🎉 ${s.name}「${label}」+${points}` : `⚠️ ${s.name}「${label}」${points}`, points > 0 ? 'ok' : 'warn', points > 0 ? 'ok' : 'deduct');
-      });
+      const p = App.run({ type: 'points.award', studentId: s.id, date: App.s.date, ruleId: rule });
+      afterAccepted(p, points > 0 ? `🎉 ${s.name}「${label}」+${points}` : `⚠️ ${s.name}「${label}」${points}`, points > 0 ? 'ok' : 'warn', points > 0 ? 'ok' : 'deduct');
     },
     'award-custom': function (el) {
       const box = el.closest('[data-custom]');
@@ -192,10 +189,8 @@
       if (!raw) return App.toast('⚠️ 請輸入分數', 'warn');
       if (!reason) return App.toast('⚠️ 請輸入事由', 'warn');
       const points = Number(el.dataset.sign) * raw;
-      App.ensureSession().then(function (sessionId) {
-        const p = App.run({ type: 'points.award', studentId: s.id, sessionId: sessionId, points: points, reason: reason });
-        afterAccepted(p, `${points > 0 ? '🎉' : '⚠️'} ${s.name}「${reason}」${points > 0 ? '+' : ''}${points}`, points > 0 ? 'ok' : 'warn', points > 0 ? 'ok' : 'deduct');
-      });
+      const p = App.run({ type: 'points.award', studentId: s.id, date: App.s.date, points: points, reason: reason });
+      afterAccepted(p, `${points > 0 ? '🎉' : '⚠️'} ${s.name}「${reason}」${points > 0 ? '+' : ''}${points}`, points > 0 ? 'ok' : 'warn', points > 0 ? 'ok' : 'deduct');
     },
     undo: function (el) {
       const log = App.s.data.logs.find(function (l) { return l.id === el.dataset.log; });
@@ -328,16 +323,14 @@
           if (!points) return App.toast('⚠️ 請輸入分數', 'warn');
           const reason = f.reason.trim() || (sign > 0 ? '小隊團體加分' : '小隊團體扣分');
           const target = f.target === 'checkedIn' ? { checkedIn: true } : f.target === 'all' ? { all: true } : { teamId: f.target.slice(5) };
-          App.ensureSession().then(function (sessionId) {
-            const p = App.run({ type: 'points.batch', classId: cls.id, sessionId: sessionId, points: points, reason: reason, target: target });
-            if (p.accepted) {
-              close();
-              p.then(function (res) {
-                App.sound(points > 0 ? 'ok' : 'deduct');
-                App.toast(`${points > 0 ? '⚡' : '⚠️'} 已為 ${res.result.count} 位學員${points > 0 ? '加' : '扣'} ${Math.abs(points)} 分`, points > 0 ? 'ok' : 'warn');
-              });
-            }
-          });
+          const p = App.run({ type: 'points.batch', classId: cls.id, date: App.s.date, points: points, reason: reason, target: target });
+          if (p.accepted) {
+            close();
+            p.then(function (res) {
+              App.sound(points > 0 ? 'ok' : 'deduct');
+              App.toast(`${points > 0 ? '⚡' : '⚠️'} 已為 ${res.result.count} 位學員${points > 0 ? '加' : '扣'} ${Math.abs(points)} 分`, points > 0 ? 'ok' : 'warn');
+            });
+          }
         });
       }
     });

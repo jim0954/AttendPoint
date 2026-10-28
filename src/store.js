@@ -396,9 +396,21 @@
     }, extra || {}));
   }
 
-  function optionalSession(state, sessionId) {
-    if (!sessionId) return null;
-    return mustFind(state.sessions, sessionId, '課次');
+  /**
+   * 積分操作的課次：可以給 sessionId，或給 date（該班當天的課次）。
+   * 給 date 且當天還沒有課次時，create 為 true 就依常態時間自動建立——
+   * 點名畫面不必先等後端建立課次，第一次點名也能立即顯示。
+   */
+  function sessionOf(state, p, classId, ctx, create) {
+    if (p.sessionId) {
+      const session = mustFind(state.sessions, p.sessionId, '課次');
+      if (session.classId !== classId) fail('INVALID_INPUT', '這堂課不屬於該學員的班別');
+      return session;
+    }
+    if (!p.date) return null;
+    const d = date(p.date, '上課日期');
+    if (!create) return findSession(state, classId, d);
+    return findById(state.sessions, OPS['session.ensure'](state, { classId: classId, date: d }, ctx).id);
   }
 
   // ---------- 操作（每個操作都在 draft 上執行） ----------
@@ -755,8 +767,8 @@
 
   OPS['points.checkin'] = function (state, p, ctx) {
     const student = mustFind(state.students, p.studentId, '學員');
-    const session = mustFind(state.sessions, p.sessionId, '課次');
-    if (session.classId !== student.classId) fail('INVALID_INPUT', `${student.name} 不屬於這堂課的班別`);
+    const session = sessionOf(state, p, student.classId, ctx, true);
+    if (!session) fail('INVALID_INPUT', '請指定課次或上課日期');
     if (isCheckedIn(state, student.id, session.id)) {
       fail('ALREADY_CHECKED_IN', `${student.name} 在 ${session.date} 已經報到過了`);
     }
@@ -772,7 +784,7 @@
       honorDelta: rule ? rule.points : 0,
       balanceDelta: rule ? rule.points : 0
     });
-    return { logId: log.id, points: log.honorDelta };
+    return { logId: log.id, points: log.honorDelta, sessionId: session.id };
   };
 
   /**
@@ -782,7 +794,8 @@
    */
   OPS['points.award'] = function (state, p, ctx) {
     const student = mustFind(state.students, p.studentId, '學員');
-    optionalSession(state, p.sessionId);
+    const session = sessionOf(state, p, student.classId, ctx, true);
+    const sessionId = session ? session.id : null;
     let points;
     let reason;
     let ruleId = null;
@@ -800,7 +813,7 @@
       if (points === 0) fail('INVALID_INPUT', '分數不可為 0');
       reason = text(p.reason, '事由', { required: true, max: 60 });
     }
-    const log = addPoints(state, ctx, student, p.sessionId, points, reason, { ruleId: ruleId });
+    const log = addPoints(state, ctx, student, sessionId, points, reason, { ruleId: ruleId });
     return { logId: log.id, honorDelta: log.honorDelta, balanceDelta: log.balanceDelta };
   };
 
@@ -810,10 +823,11 @@
    */
   OPS['points.batch'] = function (state, p, ctx) {
     const cls = mustFind(state.classes, p.classId, '班別');
-    const session = optionalSession(state, p.sessionId);
     const points = int(p.points, '分數', { min: -1000, max: 1000 });
     if (points === 0) fail('INVALID_INPUT', '分數不可為 0');
     const reason = text(p.reason, '事由', { required: true, max: 60 });
+    // 「本堂已報到」時課次一定已經存在，不必建立
+    const session = sessionOf(state, p, cls.id, ctx, !(p.target && p.target.checkedIn));
     const target = p.target || {};
     let members = active(state.students).filter(function (s) { return s.classId === cls.id; });
     if (target.teamId) {
@@ -826,9 +840,10 @@
       fail('INVALID_INPUT', '請選擇加減分對象');
     }
     if (members.length === 0) fail('NO_MATCH', '找不到符合條件的學員');
+    const sessionId = session ? session.id : null;
     const batchId = ctx.newId('B');
     members.forEach(function (s) {
-      addPoints(state, ctx, s, p.sessionId, points, '[團體] ' + reason, { batchId: batchId });
+      addPoints(state, ctx, s, sessionId, points, '[團體] ' + reason, { batchId: batchId });
     });
     return { batchId: batchId, count: members.length };
   };
@@ -840,11 +855,12 @@
     if (t.balance < gift.cost) {
       fail('INSUFFICIENT_POINTS', `${student.name} 可用點數不足（目前 ${t.balance} 點，需 ${gift.cost} 點）`);
     }
+    const session = sessionOf(state, p, student.classId, ctx, false); // 兌換不建立課次
     const log = pushLog(state, ctx, {
       type: 'redeem',
       classId: student.classId,
       studentId: student.id,
-      sessionId: p.sessionId || null,
+      sessionId: session ? session.id : null,
       giftId: gift.id,
       reason: '兌換：' + gift.name,
       honorDelta: 0,

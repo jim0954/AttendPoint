@@ -120,7 +120,7 @@
       const s = App.studentById(el.dataset.id);
       App.confirm(`${s.name} 要兌換「${gift.name}」，扣除 ${gift.cost} 點？`, { okLabel: '確認兌換' }).then(function (yes) {
         if (!yes) return;
-        const p = App.run({ type: 'points.redeem', studentId: s.id, giftId: gift.id, sessionId: App.session() ? App.session().id : null });
+        const p = App.run({ type: 'points.redeem', studentId: s.id, giftId: gift.id, date: App.s.date });
         if (p.accepted) {
           App.sound('gift');
           App.toast(`🎁 ${s.name} 兌換「${gift.name}」成功！`, 'gift');

@@ -62,7 +62,14 @@ test('雲端版', { skip: SKIP }, async (t) => {
     assert.equal(tabs.includes('owner'), false);
     assert.ok(tabs.includes('roster') && tabs.includes('manage'));
     await calls();
-    await card(page, '王小明').locator('[data-action="checkin"]').click();
+    // 今天第一次點名（還沒有課次）：按下去畫面立即更新，不必等後端建立課次（模擬後端每次延遲 300ms）
+    assert.equal(await page.evaluate(() => App.session()), null);
+    const reacted = await page.evaluate(() => {
+      document.querySelector('#studentGrid [data-action="checkin"]').click(); // 王小明排第一
+      const s = App.s.data.students.find((x) => x.name === '王小明');
+      return !!App.session() && AttendStore.isCheckedIn(App.s.data, s.id, App.session().id);
+    });
+    assert.equal(reacted, true);
     await toast(page, '王小明 報到成功');
     await idle(page);
     await card(page, '王小明').locator('button', { hasText: '已報到' }).waitFor();

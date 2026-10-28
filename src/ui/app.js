@@ -183,15 +183,6 @@
     if (view && !AttendAuth.atLeast(user, view.minRole || 'viewer')) App.s.tab = 'checkin';
   };
 
-  /** 取得目前班別、日期的課次；沒有就建立（點名前呼叫） */
-  App.ensureSession = function () {
-    const found = App.session();
-    if (found) return Promise.resolve(found.id);
-    return App.run({ type: 'session.ensure', classId: App.s.classId, date: App.s.date }).then(function (res) {
-      return res.result.id;
-    });
-  };
-
   // ---------- 外框 ----------
 
   function renderHeader() {

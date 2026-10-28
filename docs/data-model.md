@@ -84,6 +84,8 @@ state
 | 禮品 | `gift.create`、`gift.update`、`gift.delete`、`gift.restore` |
 | 系統 | `meta.update`、`year.reset` |
 
+積分操作的課次可以給 `sessionId`，或只給 `date`（上課日期）：`points.checkin`、`points.award`、`points.batch` 給 `date` 時，該班當天還沒有課次就依常態時間自動建立；`points.redeem` 給 `date` 只對應既有課次，不會建立。點名畫面一律送 `date`，第一次點名不必先等後端建立課次，按下去畫面就立即更新。
+
 階段 2 會依這份清單訂出權限表：`*.delete`、`*.restore`、`points.adjust`、`year.reset` 僅限擁有者。
 
 ## 雲端同步（只傳變動）

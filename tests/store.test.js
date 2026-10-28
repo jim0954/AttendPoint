@@ -353,3 +353,31 @@ test('syncId：舊資料沒有 syncId 時自動補上', () => {
   delete state.meta.syncId;
   assert.ok(Store.upgrade(state).meta.syncId);
 });
+
+test('積分操作可以只給上課日期：當天沒有課次時自動建立，同一天共用同一堂課', () => {
+  const t = setup();
+  const day = '2026-10-31';
+  assert.equal(Store.findSession(t.state, t.classId, day), null);
+  const r1 = t.run({ type: 'points.checkin', studentId: t.a, date: day });
+  const session = Store.findSession(t.state, t.classId, day);
+  assert.ok(session);
+  assert.equal(r1.sessionId, session.id);
+  assert.equal(session.start, '09:30'); // 依常態時間帶入
+  t.run({ type: 'points.checkin', studentId: t.b, date: day });
+  const ruleId = t.cls().addRules.find((r) => !r.isCheckin).id;
+  t.run({ type: 'points.award', studentId: t.a, date: day, ruleId });
+  t.run({ type: 'points.batch', classId: t.classId, date: day, target: { checkedIn: true }, points: 5, reason: '秩序良好' });
+  assert.equal(t.state.sessions.filter((s) => s.date === day).length, 1);
+  assert.ok(t.state.logs.filter((l) => l.reason !== '').every((l) => l.sessionId === session.id));
+  expectError(() => t.run({ type: 'points.checkin', studentId: t.a, date: day }), 'ALREADY_CHECKED_IN');
+  expectError(() => t.run({ type: 'points.checkin', studentId: t.a }), 'INVALID_INPUT');
+});
+
+test('兌換給上課日期時只對應既有課次，不會建立課次', () => {
+  const t = setup();
+  t.run({ type: 'points.adjust', studentId: t.a, honorDelta: 50, balanceDelta: 50, reason: '期初' });
+  t.run({ type: 'points.redeem', studentId: t.a, giftId: t.giftId, date: '2026-11-07' });
+  assert.equal(Store.findSession(t.state, t.classId, '2026-11-07'), null);
+  const r = t.run({ type: 'points.redeem', studentId: t.a, giftId: t.giftId, date: '2026-10-24' });
+  assert.equal(t.state.logs.find((l) => l.id === r.logId).sessionId, t.sessionId);
+});
