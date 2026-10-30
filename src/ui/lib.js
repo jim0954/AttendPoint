@@ -65,13 +65,35 @@
   };
 
   // ---------- 提示 ----------
+  // 連續操作時提示不要淹沒畫面：相同的提示合併成一則並顯示「×N」，最多同時顯示 3 則
+  const TOAST_MAX = 3;
   App.toast = function (message, tone) {
     const root = App.$('#toastRoot');
-    const el = document.createElement('div');
-    el.className = 'toast' + (tone ? ' ' + tone : '');
-    el.textContent = message;
-    root.appendChild(el);
-    setTimeout(function () { el.remove(); }, tone === 'warn' ? 4500 : 2800);
+    const kind = tone || '';
+    let el = Array.prototype.find.call(root.children, function (x) {
+      return x.dataset.msg === message && x.dataset.tone === kind;
+    });
+    if (el) {
+      el.dataset.count = Number(el.dataset.count) + 1;
+      el.querySelector('.toast-count').textContent = '×' + el.dataset.count;
+      clearTimeout(el.timer);
+      el.style.animation = 'none';
+      void el.offsetWidth; // 重新播放出現動畫，讓人知道又多了一次
+      el.style.animation = '';
+    } else {
+      el = document.createElement('div');
+      el.className = 'toast' + (tone ? ' ' + tone : '');
+      el.dataset.msg = message;
+      el.dataset.tone = kind;
+      el.dataset.count = 1;
+      el.textContent = message;
+      const count = document.createElement('span');
+      count.className = 'toast-count';
+      el.appendChild(count);
+    }
+    root.appendChild(el); // 已有的那則也移到最下面（最新）
+    while (root.children.length > TOAST_MAX) root.firstElementChild.remove();
+    el.timer = setTimeout(function () { el.remove(); }, tone === 'warn' ? 4500 : 2800);
   };
 
   // ---------- 對話框 ----------

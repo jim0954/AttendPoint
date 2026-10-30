@@ -182,6 +182,19 @@ test('單機版', { skip: SKIP }, async (t) => {
     assert.equal(csv, "\ufeff'=1+1,'@x,'-遲到,-5,王小明");
   });
 
+  await t.test('提示：相同的合併成一則並顯示次數，最多同時 3 則', async () => {
+    const texts = () => page.locator('#toastRoot .toast').allInnerTexts();
+    await page.evaluate(() => {
+      document.querySelector('#toastRoot').innerHTML = '';
+      for (let i = 0; i < 5; i++) App.toast('🎉 王小明「回答優良」+3', 'ok');
+    });
+    assert.deepEqual(await texts(), ['🎉 王小明「回答優良」+3×5']);
+    await page.evaluate(() => ['甲', '乙', '丙'].forEach((x) => App.toast(x)));
+    assert.deepEqual(await texts(), ['甲', '乙', '丙']);
+    await page.evaluate(() => App.toast('甲'));
+    assert.deepEqual(await texts(), ['乙', '丙', '甲×2']);
+  });
+
   await t.test('沒有程式錯誤', () => {
     assert.deepEqual(page.errors, []);
   });
