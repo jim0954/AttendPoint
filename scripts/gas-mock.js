@@ -34,6 +34,14 @@ function mockSheet(name) {
   };
 }
 
+// 與 Apps Script 相同：單一指令碼屬性的值最多 9 KB
+const PROP_MAX_BYTES = 9 * 1024;
+function propValue(k, v) {
+  const s = String(v);
+  if (Buffer.byteLength(s) > PROP_MAX_BYTES) throw new Error(`Exception: The argument is too large: ${k}`);
+  return s;
+}
+
 function createGas(propsInit) {
   const sheets = {};
   const props = Object.assign({}, propsInit);
@@ -50,7 +58,9 @@ function createGas(propsInit) {
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => (k in props ? props[k] : null),
-        setProperty: (k, v) => { props[k] = String(v); }
+        setProperty: (k, v) => { props[k] = propValue(k, v); },
+        setProperties: (obj) => { Object.keys(obj).forEach((k) => { props[k] = propValue(k, obj[k]); }); },
+        deleteProperty: (k) => { delete props[k]; }
       })
     },
     CacheService: {

@@ -47,7 +47,9 @@ const mocks = `
   window.SpreadsheetApp = { getActiveSpreadsheet: function () { return ss; }, openById: function () { return ss; }, flush: function () {}, getUi: function () { throw new Error('no ui'); } };
   window.PropertiesService = { getScriptProperties: function () { return {
     getProperty: function (k) { return k in props ? props[k] : null; },
-    setProperty: function (k, v) { props[k] = String(v); }
+    setProperty: function (k, v) { props[k] = String(v); },
+    setProperties: function (obj) { Object.keys(obj).forEach(function (k) { props[k] = String(obj[k]); }); },
+    deleteProperty: function (k) { delete props[k]; }
   }; } };
   window.CacheService = { getScriptCache: function () { return {
     get: function (k) { return k in cache ? cache[k] : null; },
