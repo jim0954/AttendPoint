@@ -68,10 +68,12 @@
   // 加減分類的操作先在畫面上立即生效（樂觀更新），再依序送到後端；
   // 後端回應後以後端資料為準，失敗時退回並提示。
   // 會建立新資料（需要後端給的 id）的操作則等後端回應後才更新畫面。
+  // 雲端版每次讀寫試算表要好幾秒：送出時把排隊中的操作合併成一次送出（apiApplyBatch）。
   const OPTIMISTIC = ['points.checkin', 'points.award', 'points.batch', 'points.redeem', 'session.duty'];
   const queue = [];
   let confirmed = null; // 最後一次後端確認的資料
   let sending = false;
+  const BATCH_MAX = 30; // 與後台 Code.js 相同
 
   function localApply(state, op) {
     AttendAuth.authorize(state, op, App.s.user, App.today());
@@ -90,27 +92,47 @@
   function pump() {
     if (sending || queue.length === 0) return;
     sending = true;
-    const item = queue[0];
+    // 後台版本較舊時沒有合併送出，改回一次一個
+    const canBatch = App.s.backend.applyBatch && !App.s.backendOutdated;
+    const items = queue.slice(0, canBatch ? BATCH_MAX : 1);
     function settle() {
-      queue.shift();
+      queue.splice(0, items.length);
       sending = false;
       App.s.pending = queue.length;
       if (queue.length === 0 && confirmed) App.s.data = confirmed;
       else replayPending();
       App.render();
     }
-    // 先更新畫面資料再通知呼叫端，呼叫端拿到結果時就能看到新資料
-    App.s.backend.apply(item.op).then(function (res) {
-      confirmed = res.state;
+    function failAll(err) {
       settle();
-      item.resolve(res);
-      pump();
-    }, function (err) {
-      settle();
-      item.reject(err);
+      items.forEach(function (item) { item.reject(err); });
       App.handleError(err);
       pump();
-    });
+    }
+    // 先更新畫面資料再通知呼叫端，呼叫端拿到結果時就能看到新資料
+    if (items.length === 1) {
+      App.s.backend.apply(items[0].op).then(function (res) {
+        confirmed = res.state;
+        settle();
+        items[0].resolve(res);
+        pump();
+      }, failAll);
+      return;
+    }
+    App.s.backend.applyBatch(items.map(function (item) { return item.op; })).then(function (res) {
+      confirmed = res.state;
+      settle();
+      // 個別失敗的操作（例如別台已經點過名）只退回那一個，其他照常成功
+      res.results.forEach(function (r, i) {
+        if (r.ok) {
+          items[i].resolve({ result: r.result, backup: r.backup, state: res.state });
+        } else {
+          items[i].reject(r);
+          App.handleError(r);
+        }
+      });
+      pump();
+    }, failAll);
   }
 
   /**
@@ -143,6 +165,13 @@
   };
 
   App.isBusy = function () { return queue.length > 0; };
+
+  // 還有操作沒送到後台時，關閉或重新整理網頁要先提醒（沒送出的會遺失）
+  window.addEventListener('beforeunload', function (e) {
+    if (!App.isBusy()) return;
+    e.preventDefault();
+    e.returnValue = '還有資料沒同步完成';
+  });
 
   /** 以後端資料為準重設畫面資料（初始化、重新整理、匯入後使用） */
   App.loadData = function (state) {

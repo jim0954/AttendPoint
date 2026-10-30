@@ -93,6 +93,38 @@ test('改版前的登入（token 只記帳號 id）需要重新登入', () => {
   fail(g.apiListUsers('legacy'), 'SESSION_EXPIRED');
 });
 
+test('合併送出：一次讀寫試算表，失敗的操作不影響其他操作', () => {
+  const env = setup();
+  const { g, owner, staff, classId, props } = env;
+  const ids = ['王小明', '李小華', '陳大同'].map((name) => ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name })).result.id);
+  const date = '2026-10-24';
+  ok(g.apiApply(staff, { type: 'points.checkin', studentId: ids[0], date }));
+  const before = props.DATA_SHEET;
+  const res = ok(g.apiApplyBatch(staff, [
+    { type: 'points.checkin', studentId: ids[1], date },
+    { type: 'points.checkin', studentId: ids[0], date }, // 已經報到過
+    { type: 'student.delete', id: ids[2] }, // 壇務不能刪除
+    { type: 'points.award', studentId: ids[2], date, points: 3, reason: '幫忙' }
+  ], null));
+  assert.deepEqual(res.results.map((r) => r.ok ? 'ok' : r.code), ['ok', 'ALREADY_CHECKED_IN', 'FORBIDDEN', 'ok']);
+  assert.notEqual(props.DATA_SHEET, before, '有成功的操作才寫入');
+  const after = props.DATA_SHEET;
+  const state = ok(g.apiGetState(owner)).state;
+  assert.equal(state.students.filter((x) => !x.deletedAt).length, 3);
+  assert.equal(state.logs.filter((l) => l.type === 'checkin').length, 2);
+  assert.ok(state.logs.some((l) => l.reason === '幫忙' && l.operatorName === '壇務甲'));
+  assert.ok(res.state, '回傳最新資料');
+  // 全部失敗時不寫入
+  const none = ok(g.apiApplyBatch(staff, [{ type: 'points.checkin', studentId: ids[1], date }], null));
+  assert.equal(none.results[0].ok, false);
+  assert.equal(props.DATA_SHEET, after);
+  // 格式與權限
+  fail(g.apiApplyBatch(staff, [], null), 'INVALID_INPUT');
+  fail(g.apiApplyBatch(staff, new Array(31).fill({ type: 'gift.create', name: 'x', cost: 1 }), null), 'INVALID_INPUT');
+  fail(g.apiApplyBatch(null, [{ type: 'gift.create', name: 'x', cost: 1 }], null), 'FORBIDDEN');
+  assert.equal(ok(g.apiApplyBatch(staff, [null], null)).results[0].ok, false);
+});
+
 test('登入清單只有名稱與角色，不含 PIN 資訊', () => {
   const { g } = setup();
   const res = ok(g.apiLoginOptions());

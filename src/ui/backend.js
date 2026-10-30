@@ -139,6 +139,8 @@
     return this.call('apiLogout', token).catch(function () {});
   };
   GasBackend.prototype.apply = function (op) { return this.sync('apiApply', this.token, op); };
+  /** 一次送出多個操作（只讀寫試算表一次），res.results 依序是各操作的結果 */
+  GasBackend.prototype.applyBatch = function (ops) { return this.sync('apiApplyBatch', this.token, ops); };
   GasBackend.prototype.listUsers = function () { return this.call('apiListUsers', this.token); };
   GasBackend.prototype.userOp = function (op) { return this.call('apiUserOp', this.token, op); };
   GasBackend.prototype.exportBackup = function () {

@@ -29,6 +29,7 @@ const LOCK_WAIT_MS = 15000;
 const MAX_FAILS = 5;
 const FAIL_WINDOW = 15 * 60;
 const OWNER_ID = 'U-owner';
+const BATCH_MAX = 30; // 一次合併送出的操作上限
 // 後台程式版本：npm run build 時換成 store／auth／migrate-v2／Code 的指紋，
 // 網頁比對不同時會提示擁有者更新 Apps Script
 const BACKEND_VERSION = '@BACKEND_VERSION@';
@@ -42,7 +43,7 @@ function doGet() {
 
 // 網頁可以呼叫的 API（其他函式一律拒絕）
 const API_FUNCTIONS = [
-  'apiLoginOptions', 'apiLogin', 'apiLogout', 'apiGetState', 'apiApply',
+  'apiLoginOptions', 'apiLogin', 'apiLogout', 'apiGetState', 'apiApply', 'apiApplyBatch',
   'apiListUsers', 'apiUserOp', 'apiExportBackup', 'apiImportState', 'apiRebuildReports',
   'apiGetLogo', 'apiSetLogo'
 ];
@@ -408,6 +409,41 @@ function apiApply(token, op, since) {
       const r = AttendStore.apply(state, op, { now: function () { return nowIso_(); }, operatorId: user.id, operatorName: user.name });
       writeState_(r.state);
       return Object.assign({ result: r.result, backup: backup }, AttendAuth.syncView(r.state, user, since));
+    });
+  });
+}
+
+/**
+ * 一次執行多個資料操作（網頁連續點名時合併送出）：只讀寫試算表一次。
+ * 每個操作各自檢查權限與規則，失敗的那一個不生效，其他照常；results 依序回報各操作的結果。
+ */
+function apiApplyBatch(token, ops, since) {
+  return respond_(function () {
+    const user = requireUser_(token);
+    if (!Array.isArray(ops) || ops.length === 0 || ops.length > BATCH_MAX) {
+      throw appError_('INVALID_INPUT', '一次最多送出 ' + BATCH_MAX + ' 個操作');
+    }
+    return withLock_(function () {
+      let state = readState_();
+      const today = nowIso_().slice(0, 10);
+      const ctx = { now: function () { return nowIso_(); }, operatorId: user.id, operatorName: user.name };
+      let changed = false;
+      const results = ops.map(function (op) {
+        try {
+          AttendAuth.authorize(state, op, user, today);
+          const backup = op.type === 'year.reset' ? backup_(state, YEAR_RESET_LABEL) : null;
+          const r = AttendStore.apply(state, op, ctx);
+          state = r.state;
+          changed = true;
+          return { ok: true, result: r.result, backup: backup };
+        } catch (e) {
+          if (e && e.code) return { ok: false, code: e.code, message: e.message };
+          console.error(e && e.stack ? e.stack : e);
+          return { ok: false, code: 'SERVER_ERROR', message: '系統發生錯誤，請稍後再試' };
+        }
+      });
+      if (changed) writeState_(state);
+      return Object.assign({ results: results }, AttendAuth.syncView(state, user, since));
     });
   });
 }

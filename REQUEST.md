@@ -78,8 +78,8 @@ npm run e2e
 ## 已驗證事項（請仍獨立判斷）
 
 - **自動測試（2026-10-30）**
-  - `npm test`：82 項全過（資料層、權限、增量同步、v2 移轉、後台在 Node 模擬環境的完整流程、寫入失敗、資料工作表遺失或損壞、備份清理、`doPost` 白名單、LOGO、建置設定）。
-  - `npm run e2e`：26 項全過，分單機版與模擬雲端版兩組。內容包括：建班、名冊、點名、加減分、兌換、撤銷、重新開啟、名字含 HTML、訪客遮蔽、壇務權限、多裝置增量同步、寫入失敗退回、登入逾時、後台版本提示、存取權錯誤提示、服務人員點名、LOGO 上傳、職務選單、舊職務保留。
+  - `npm test`：83 項全過（資料層、權限、增量同步、v2 移轉、後台在 Node 模擬環境的完整流程、寫入失敗、資料工作表遺失或損壞、備份清理、`doPost` 白名單、LOGO、建置設定）。
+  - `npm run e2e`：28 項全過，分單機版與模擬雲端版兩組。內容包括：建班、名冊、點名、加減分、兌換、撤銷、重新開啟、名字含 HTML、訪客遮蔽、壇務權限、多裝置增量同步、寫入失敗退回、登入逾時、後台版本提示、存取權錯誤提示、服務人員點名、LOGO 上傳、職務選單、舊職務保留、連續操作合併送出、關閉前提醒。
   - GitHub Actions「發布網頁」每次推送都會跑 `npm test` 並發布。
 - **壓力測試**（Node、記憶體模擬試算表，見 `docs/stress-test.md`）
   - 中型規模（3 班 × 50 人、一年）約 4.3 MB。
@@ -114,10 +114,10 @@ npm run e2e
    - 對所有帳號輪流猜（`apiLoginOptions` 會公開帳號清單）、CacheService 提早清除計數，這兩種情況的影響。
    - 另一面：任何人都能故意輸錯 PIN，把所有帳號鎖住（上次審查第 3 項，評估後暫不修，請判斷理由是否成立）。有沒有兩全的做法？
    - token：用兩個 UUID 產生、存在 CacheService、6 小時內有使用就自動延長。登出、停用帳號、修改擁有者 PIN（`OWNER_PIN`）後，舊 token 會不會仍然有效？token 存在 localStorage，在共用裝置上的風險。
-2. **授權能否被繞過**（`apiApply` → `AttendAuth.authorize` → `AttendStore.apply`；`apiUserOp` → `applyUserOp`）
+2. **授權能否被繞過**（`apiApply`、`apiApplyBatch`（合併送出，每個操作各自檢查）→ `AttendAuth.authorize` → `AttendStore.apply`；`apiUserOp` → `applyUserOp`）
    - 壇務能否自己組 op，做到擁有者才能做的事？例如在 `*.update` 的 patch、`points.*`、`student.import`、`session.save`、`class.update` 的參數中夾帶欄位，造成刪除、還原、改分、改別人的紀錄，或撤銷不是自己、不是今天的紀錄。
    - 壇務能否提升自己的權限、改別人的 PIN、改擁有者主帳號，或讓停用的帳號恢復。
-   - 訪客能否寫入任何資料：`apiApply`、`apiUserOp`、`apiSetLogo`、`apiImportState`、`apiRebuildReports`、`apiExportBackup`。
+   - 訪客能否寫入任何資料：`apiApply`、`apiApplyBatch`、`apiUserOp`、`apiSetLogo`、`apiImportState`、`apiRebuildReports`、`apiExportBackup`。
 3. **資料外洩**（`AttendAuth.viewFor`、`syncView`；`apiLoginOptions`、`apiGetState` 的 `since` 參數）
    - 訪客能否拿到未遮蔽的學員名字、備註、操作者，或回收區的資料？例如偽造 `since.view`、`logCount`，或在登入登出之間切換。
    - 訪客看得到的欄位是否恰當：流水帳的 `reason`（壇務自己輸入的事由、擁有者校正的原因）、服務人員的完整姓名、`apiLoginOptions` 公開的帳號名稱。對公開網址而言，這些合適嗎？
@@ -191,7 +191,8 @@ npm run e2e
    - `readState_` 不加鎖讀取，遇到寫入中途或連續寫入時的行為。
    - `LockService` 的範圍：`apiUserOp`、`apiSetLogo` 與 `apiApply` 之間。
    - 備份清理 `pruneBackups_` 會不會刪錯（例如跨年度結算的備份）。
-5. **樂觀更新**（`src/ui/app.js` 的 `OPTIMISTIC`、`queue`、`replayPending`、`confirmed`）
+5. **樂觀更新與合併送出**（`src/ui/app.js` 的 `OPTIMISTIC`、`queue`、`pump`、`replayPending`、`confirmed`；`apiApplyBatch`）
+   - 合併送出時部分操作被拒絕：其他操作的結果、畫面資料、回應的對應順序是否正確；後台寫入失敗時是否全部退回。
    - 後台失敗時畫面能否正確退回。
    - 連續快速操作、與 30 秒輪詢同時發生時。
    - 本機套用成功但後台拒絕（例如其他裝置已改過）時。
@@ -207,6 +208,7 @@ npm run e2e
 
 | commit | 內容 |
 |---|---|
+| 階段 6-11 | 連續操作合併送出（`apiApplyBatch`）、還沒同步完成時關閉網頁先提醒 |
 | 階段 6-10 | 修正第三、四次審查的 A–C（登入安全、訪客事由） |
 | 階段 6-9 | REQUEST.md 加入安全性審查（必做） |
 | 階段 6-8 | 修正第二次審查的發現（見上方「已知問題」） |

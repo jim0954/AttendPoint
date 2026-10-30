@@ -36,5 +36,6 @@
 - 6-3：服務人員在點名頁直接點名（`session.duty`，記入課次執勤 `dutyStaffIds`）。
 - 6-4：LOGO 由擁有者在「系統與備份」上傳，存在後台（`apiGetLogo`／`apiSetLogo`），不放進 repo。
 - 6-5：服務人員職務固定為點傳師、主壇務、副主壇務、護持壇務（`AttendStore.STAFF_ROLES`，後台也檢查）。6-6～6-10：外部審查（`REQUEST.md`，結果 `FINDINGS.md` 不進 repo）與修正，處理結果記在 `REQUEST.md` 的「已知問題」。6-10 加強登入安全（PIN 至少 6 位、失敗次數加鎖、改 PIN 後舊登入失效）並隱藏訪客看到的自行輸入事由。
+- 6-11：連續操作合併送出（`apiApplyBatch`，後台只讀寫試算表一次），還沒同步完成時關閉網頁先提醒。
 - 尚未部署到真正的 Google Apps Script 實測（階段 4 其餘測試、階段 5 GitHub 門面與部署、階段 6 佛堂試行）。
 - 根目錄 `AttendPoint.html` 是 v2 舊版，`tests/migrate-v2.test.js` 用它當移轉測試資料。

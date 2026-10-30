@@ -23,7 +23,7 @@ test('雲端版', { skip: SKIP }, async (t) => {
     apiApply(tok, { type: 'staff.create', name: '林輔導', role: '護持壇務', classIds: [cls.id] });
     // 記錄每次讀取／寫入的回應類型（整份、只傳變動、沒有變動）
     window.__calls = [];
-    ['apiApply', 'apiGetState'].forEach((name) => {
+    ['apiApply', 'apiApplyBatch', 'apiGetState'].forEach((name) => {
       const orig = window[name];
       window[name] = function () {
         const res = orig.apply(null, arguments);
@@ -191,6 +191,62 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await page.click('[data-action="refresh"]');
     await page.waitForFunction(() => window.__calls.length > 0);
     assert.deepEqual(await calls(), [{ name: 'apiGetState', kind: 'unchanged' }]);
+  });
+
+  await t.test('連續快速操作：合併成一次送出，被後台拒絕的只退回那一個', async () => {
+    // 另一台先建立禮品，這台重新整理後看得到；接著另一台把王小明的點數校正為 0（這台還不知道）
+    await page.evaluate((pin) => {
+      const tok = apiLogin('U-owner', pin).token;
+      apiApply(tok, { type: 'gift.create', name: '測試禮品', cost: 1 });
+    }, OWNER_PIN);
+    await page.click('[data-action="refresh"]');
+    await page.waitForFunction(() => App.s.data.gifts.some((x) => x.name === '測試禮品'));
+    await idle(page);
+    await page.evaluate((pin) => {
+      const tok = apiLogin('U-owner', pin).token;
+      const stu = readState_().students.find((x) => x.name === '王小明');
+      const balance = AttendStore.studentTotals(readState_(), stu.id).balance;
+      apiApply(tok, { type: 'points.adjust', studentId: stu.id, balanceDelta: -balance, reason: '測試' });
+    }, OWNER_PIN);
+    await calls();
+
+    const before = await page.evaluate(() => readState_().logs.length);
+    const accepted = await page.evaluate(() => {
+      const id = (name) => App.s.data.students.find((x) => x.name === name).id;
+      const gift = App.s.data.gifts.find((x) => x.name === '測試禮品');
+      return [
+        App.run({ type: 'points.award', studentId: id('李小華'), date: App.s.date, points: 1, reason: '合併一' }),
+        App.run({ type: 'points.redeem', studentId: id('王小明'), giftId: gift.id, date: App.s.date }),
+        App.run({ type: 'points.award', studentId: id('陳大同'), date: App.s.date, points: 1, reason: '合併二' }),
+        App.run({ type: 'points.award', studentId: id('李小華'), date: App.s.date, points: 1, reason: '合併三' })
+      ].map((p) => p.accepted);
+    });
+    assert.deepEqual(accepted, [true, true, true, true], '畫面都立即接受');
+    await idle(page);
+    await toast(page, '可用點數不足');
+    // 第一個先送出；其餘三個在它回來前排隊，合併成一次送出
+    const sent = (await calls()).filter((c) => c.name !== 'apiGetState').map((c) => c.name);
+    assert.deepEqual(sent, ['apiApply', 'apiApplyBatch']);
+    const logs = await page.evaluate(() => readState_().logs.slice(-3).map((l) => l.reason));
+    assert.deepEqual(logs, ['合併一', '合併二', '合併三']);
+    assert.equal(await page.evaluate(() => readState_().logs.length), before + 3);
+    assert.equal(await page.evaluate(() => JSON.stringify(App.s.data) === JSON.stringify(readState_())), true);
+  });
+
+  await t.test('還沒同步完成時關閉網頁會先提醒', async () => {
+    const warned = await page.evaluate(() => {
+      const check = () => {
+        const e = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+      };
+      const idleWarn = check();
+      const s = App.s.data.students.find((x) => x.name === '陳大同');
+      App.run({ type: 'points.award', studentId: s.id, date: App.s.date, points: 1, reason: '關閉前' });
+      return [idleWarn, check()];
+    });
+    assert.deepEqual(warned, [false, true]);
+    await idle(page);
   });
 
   await t.test('登入逾時：操作時提示重新登入，回到訪客畫面', async () => {
