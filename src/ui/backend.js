@@ -132,6 +132,10 @@
   GasBackend.prototype.logout = function () {
     const token = this.token;
     this.setToken(null);
+    // 丟掉登入時的完整資料；還在路上的讀寫回應一律當成舊的，不會把登入身分帶回來
+    this.base = null;
+    this.baseView = null;
+    this.latest = ++this.seq;
     return this.call('apiLogout', token).catch(function () {});
   };
   GasBackend.prototype.apply = function (op) { return this.sync('apiApply', this.token, op); };

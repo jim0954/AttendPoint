@@ -1,7 +1,7 @@
 // 雲端版（dist/gas-sim.html 模擬 Google Apps Script）：權限、帳號、多裝置同步、寫入失敗、登入逾時
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { SKIP, launch, idle, dialog, modal, toast, tab, card, login, logout } = require('./helpers.js');
+const { SKIP, launch, idle, dialog, modal, toast, tab, card, login } = require('./helpers.js');
 
 const OWNER_PIN = '246810';
 // 4×4 紅色 PNG，測試上傳 LOGO 用
@@ -67,7 +67,18 @@ test('雲端版', { skip: SKIP }, async (t) => {
     const saved = await page.evaluate(() => apiGetLogo().logo);
     assert.match(saved, /^data:image\/png;base64,/);
     assert.equal(await page.locator('#favicon').getAttribute('href'), saved);
-    await logout(page);
+    // 登出：網路斷線時也立即遮蔽名字，不留完整名冊在畫面與記憶體
+    await page.evaluate(() => {
+      window.__fetch0 = window.fetch;
+      window.fetch = function () { return Promise.reject(new TypeError('offline')); };
+    });
+    await page.click('#userBtn');
+    await modal(page).locator('[data-action="logout"]').click();
+    await page.locator('#modeBanner', { hasText: '訪客模式' }).waitFor();
+    assert.deepEqual((await page.locator('#studentGrid .name').allTextContents()).sort(), ['李○華', '王○明', '陳○同']);
+    assert.equal(await page.evaluate(() => JSON.stringify(App.s.data).indexOf('王小明')), -1);
+    await page.evaluate(() => { window.fetch = window.__fetch0; });
+    await idle(page);
     assert.equal(await page.locator('#brandLogo').isVisible(), true); // 訪客也看得到
   });
 

@@ -478,8 +478,11 @@
 
   App.actions.logout = function () {
     App.closeTopModal();
+    // 先在畫面與記憶體遮蔽名字，不必等後台回應（網路慢或斷線時也不會留著完整名冊）
+    App.setUser(null);
+    App.loadData(AttendAuth.viewFor(App.s.data, null));
+    App.render();
     App.s.backend.logout().then(function () {
-      App.setUser(null);
       App.toast('已登出，回到訪客模式');
       App.refresh(true);
     });
