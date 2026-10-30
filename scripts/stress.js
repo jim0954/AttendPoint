@@ -87,7 +87,7 @@ function buildYear(sc) {
     }
     classes.push({ cls, students });
   }
-  for (let i = 0; i < 4; i++) run({ type: 'staff.create', name: '服務員' + (i + 1), role: '輔導', classIds: classes.map((x) => x.cls.id) });
+  for (let i = 0; i < 4; i++) run({ type: 'staff.create', name: '服務員' + (i + 1), role: '護持壇務', classIds: classes.map((x) => x.cls.id) });
 
   const giftList = state.gifts;
   for (let w = 0; w < WEEKS; w++) {

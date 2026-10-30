@@ -213,7 +213,7 @@ test('軟刪除與還原：學員刪除後留在回收區，可還原', () => {
 
 test('服務人員：執勤指派與護持堂數統計', () => {
   const t = setup();
-  const p = t.run({ type: 'staff.create', name: '範例講師', role: '講師', classIds: [t.classId] });
+  const p = t.run({ type: 'staff.create', name: '範例點傳師', role: '點傳師', classIds: [t.classId] });
   t.run({ type: 'session.save', id: t.sessionId, date: '2026-10-24', dutyStaffIds: [p.id] });
   t.run({ type: 'session.save', classId: t.classId, date: '2026-10-31', dutyStaffIds: [p.id] });
   assert.equal(Store.computeStaffDuty(t.state)[p.id], 2);

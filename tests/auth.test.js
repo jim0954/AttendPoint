@@ -43,7 +43,7 @@ test('壇務可以點名、加分、新增與編輯，但不能刪除、還原�
   t.run({ type: 'points.checkin', studentId: t.studentId, sessionId: t.sessionId }, staffA);
   t.run({ type: 'points.award', studentId: t.studentId, points: 5, reason: '背經' }, staffA);
   t.run({ type: 'student.update', id: t.studentId, patch: { name: '王小明明' } }, staffA);
-  t.run({ type: 'staff.create', name: '範例講師', role: '講師' }, staffA);
+  t.run({ type: 'staff.create', name: '範例壇務', role: '主壇務' }, staffA);
   t.run({ type: 'gift.create', name: '文具', cost: 10 }, staffA);
   for (const op of [
     { type: 'student.delete', id: t.studentId },

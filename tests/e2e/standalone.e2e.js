@@ -136,8 +136,39 @@ test('單機版', { skip: SKIP }, async (t) => {
     await m.locator('[name=role]').selectOption('主壇務');
     await m.locator('button[type=submit]').click();
     await idle(page);
-    await page.locator('#view .chip', { hasText: '主壇務' }).waitFor();
+    // 完全比對：避免「副主壇務」也被當成符合
+    await page.locator('#view .list-item', { hasText: '林道長' }).locator('.chip', { hasText: /^主壇務$/ }).waitFor();
     assert.equal(await page.evaluate(() => App.s.data.staff.find((p) => p.name === '林道長').role), '主壇務');
+  });
+
+  await t.test('服務人員：舊職務編輯時以「（舊）」保留，改選後才換掉', async () => {
+    // 模擬改版前建立、職務不在四個選項內的服務人員
+    await page.evaluate(() => App.run({ type: 'staff.create', name: '陳師兄', role: '小隊輔', classIds: [] }));
+    await idle(page);
+    const roleOf = () => page.evaluate(() => App.s.data.staff.find((p) => p.name.indexOf('陳師兄') === 0).role);
+    const openEditor = async () => {
+      await page.locator('#view .list-item', { hasText: '陳師兄' }).locator('[data-action="edit-staff"]').click();
+      return dialog(page);
+    };
+
+    // 只改姓名：舊職務保留
+    let m = await openEditor();
+    assert.deepEqual(await m.locator('[name=role] option').allTextContents(), ['（未填）', '點傳師', '主壇務', '副主壇務', '護持壇務', '小隊輔（舊）']);
+    assert.equal(await m.locator('[name=role]').inputValue(), '小隊輔');
+    await m.locator('[name=name]').fill('陳師兄甲');
+    await m.locator('button[type=submit]').click();
+    await idle(page);
+    assert.equal(await roleOf(), '小隊輔');
+
+    // 改選新職務：換掉，之後不再出現「（舊）」
+    m = await openEditor();
+    await m.locator('[name=role]').selectOption('護持壇務');
+    await m.locator('button[type=submit]').click();
+    await idle(page);
+    assert.equal(await roleOf(), '護持壇務');
+    m = await openEditor();
+    assert.equal(await m.locator('[name=role] option', { hasText: '（舊）' }).count(), 0);
+    await m.locator('[data-close]').first().click();
   });
 
   await t.test('沒有程式錯誤', () => {
