@@ -249,6 +249,24 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await idle(page);
   });
 
+  await t.test('服務人員：護持堂數依班別分開統計', async () => {
+    // 另一台：林輔導也到另一個班支援一堂
+    await page.evaluate((pin) => {
+      const tok = apiLogin('U-owner', pin).token;
+      const cls = apiApply(tok, { type: 'class.create', name: '成人班', idPrefix: 'A' }).result;
+      const p = readState_().staff.find((x) => x.name === '林輔導');
+      apiApply(tok, { type: 'session.duty', classId: cls.id, staffId: p.id, date: '2026-10-01', on: true });
+    }, OWNER_PIN);
+    await page.click('[data-action="refresh"]');
+    await page.waitForFunction(() => App.s.data.classes.length === 2);
+    await idle(page);
+    await tab(page, 'manage');
+    await page.click('#view [data-action="manage-section"][data-id="staff"]');
+    const item = page.locator('#view .list-item', { hasText: '林輔導' });
+    assert.match(await item.innerText(), /年度護持 2 堂（兒童讀經班 1、成人班 1）/);
+    await tab(page, 'checkin');
+  });
+
   await t.test('登入逾時：操作時提示重新登入，回到訪客畫面', async () => {
     await page.evaluate(() => CacheService.getScriptCache().remove('tok:' + App.s.backend.token));
     await page.click('#view [data-action="open-batch"]');
