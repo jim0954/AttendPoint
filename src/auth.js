@@ -30,7 +30,8 @@
     'year.reset'
   ];
 
-  const PIN_RE = /^\d{4,8}$/;
+  // 後台網址公開，PIN 至少 6 位數（改版前設定的 4、5 位數 PIN 仍可登入，修改時才需要 6 位以上）
+  const PIN_RE = /^\d{6,8}$/;
   const HASH_ROUNDS = 500;
 
   class AuthError extends Error {
@@ -109,6 +110,21 @@
   }
 
   /**
+   * 訪客看到的事由：報到、加扣分規則、兌換是固定的名稱，照常顯示；
+   * 壇務自己輸入的事由與擁有者的校正原因可能寫到學員全名或家庭狀況，改成通用說法。
+   */
+  function guestReason(log, logById) {
+    if (log.type === 'checkin' || log.type === 'redeem' || (log.type === 'points' && log.ruleId)) return log.reason;
+    if (log.type === 'points') return log.honorDelta < 0 || log.balanceDelta < 0 ? '扣分' : '加分';
+    if (log.type === 'adjust') return '校正';
+    if (log.type === 'reversal') {
+      const orig = logById[log.reversesId];
+      return '撤銷：' + (orig && orig.type !== 'reversal' ? guestReason(orig, logById) : '紀錄');
+    }
+    return '';
+  }
+
+  /**
    * 依角色回傳可以看的資料。
    * 壇務、擁有者看完整資料；訪客看不到回收區、備註、操作者，學員名字遮蔽。
    */
@@ -116,6 +132,8 @@
     if (atLeast(user, 'staff')) return state;
     const live = function (list) { return list.filter(function (x) { return !x.deletedAt; }); };
     const studentIds = new Set(live(state.students).map(function (s) { return s.id; }));
+    const logById = {};
+    state.logs.forEach(function (l) { logById[l.id] = l; });
     return {
       schemaVersion: state.schemaVersion,
       meta: state.meta,
@@ -133,7 +151,7 @@
         .map(function (l) {
           return {
             id: l.id, at: l.at, type: l.type, classId: l.classId, studentId: l.studentId,
-            sessionId: l.sessionId, reversesId: l.reversesId, reason: l.reason,
+            sessionId: l.sessionId, reversesId: l.reversesId, reason: guestReason(l, logById),
             honorDelta: l.honorDelta, balanceDelta: l.balanceDelta
           };
         })
@@ -196,7 +214,7 @@
   // ---------- 帳號 ----------
 
   function validatePin(pin) {
-    if (!PIN_RE.test(String(pin || ''))) throw new AuthError('INVALID_PIN', 'PIN 碼需為 4–8 位數字');
+    if (!PIN_RE.test(String(pin || ''))) throw new AuthError('INVALID_PIN', 'PIN 碼需為 6–8 位數字');
     return String(pin);
   }
 

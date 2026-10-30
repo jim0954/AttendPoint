@@ -14,8 +14,8 @@ test('單機版', { skip: SKIP }, async (t) => {
     const m = await dialog(page);
     await m.locator('form[data-setup]').waitFor();
     await m.locator('[name=name]').fill('堂主');
-    await m.locator('[name=pin]').fill('2468');
-    await m.locator('[name=pin2]').fill('2468');
+    await m.locator('[name=pin]').fill('246802');
+    await m.locator('[name=pin2]').fill('246802');
     await m.locator('button[type=submit]').click();
     await page.locator('#userBtn', { hasText: '堂主' }).waitFor();
   });

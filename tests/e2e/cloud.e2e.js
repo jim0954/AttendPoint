@@ -53,7 +53,7 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await page.click('#view [data-action="new-user"]');
     const m = await dialog(page);
     await m.locator('[name=name]').fill('壇務甲');
-    await m.locator('[name=pin]').fill('1357');
+    await m.locator('[name=pin]').fill('135790');
     await m.locator('button[type=submit]').click();
     await toast(page, '已建立帳號「壇務甲」');
 
@@ -83,7 +83,7 @@ test('雲端版', { skip: SKIP }, async (t) => {
   });
 
   await t.test('壇務：可以點名，不能刪除、看不到擁有者後台', async () => {
-    await login(page, '1357', '壇務甲');
+    await login(page, '135790', '壇務甲');
     const tabs = await page.locator('#tabBar [data-tab]').evaluateAll((els) => els.map((e) => e.dataset.tab));
     assert.equal(tabs.includes('owner'), false);
     assert.ok(tabs.includes('roster') && tabs.includes('manage'));

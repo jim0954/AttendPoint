@@ -101,6 +101,22 @@ test('訪客畫面：名字遮蔽、沒有備註與回收區、沒有操作者',
   assert.equal(Auth.viewFor(t.state, staffA), t.state);
 });
 
+test('訪客畫面：自行輸入的事由與校正原因改成通用說法，規則、報到、兌換照常顯示', () => {
+  const t = setup();
+  t.run({ type: 'class.update', id: t.classId, patch: { addRules: t.state.classes[0].addRules.concat([{ label: '背誦經典', points: 5 }]) } }, owner);
+  const ruleId = t.state.classes[0].addRules.find((r) => r.label === '背誦經典').id;
+  t.run({ type: 'points.checkin', studentId: t.studentId, sessionId: t.sessionId }, staffA);
+  t.run({ type: 'points.award', studentId: t.studentId, sessionId: t.sessionId, ruleId }, staffA);
+  t.run({ type: 'points.award', studentId: t.studentId, points: 3, reason: '王小明家裡有事仍到' }, staffA);
+  t.run({ type: 'points.award', studentId: t.studentId, points: -2, reason: '王小明上課吵鬧' }, staffA);
+  t.run({ type: 'points.adjust', studentId: t.studentId, honorDelta: 1, reason: '家長來電更正' }, owner);
+  t.run({ type: 'log.reverse', logId: t.state.logs.find((l) => l.reason === '王小明家裡有事仍到').id }, staffA);
+  const reasons = Auth.viewFor(t.state, null).logs.map((l) => l.reason);
+  assert.deepEqual(reasons, ['準時報到', '背誦經典', '加分', '扣分', '校正', '撤銷：加分']);
+  assert.equal(JSON.stringify(Auth.viewFor(t.state, null)).includes('王小明'), false);
+  assert.ok(Auth.viewFor(t.state, staffA).logs.some((l) => l.reason === '王小明上課吵鬧'), '壇務看得到原文');
+});
+
 test('名字遮蔽規則', () => {
   assert.equal(Auth.maskName('王小明'), '王○明');
   assert.equal(Auth.maskName('陳宇'), '陳○');
@@ -112,26 +128,26 @@ test('帳號：建立、驗證 PIN、改 PIN、停用、權限檢查', () => {
   let n = 0;
   const deps = { sha256Hex, newSalt: () => 'salt' + ++n, newId: (p) => p + ++n, now: () => TODAY };
   let users = [];
-  const r = Auth.applyUserOp(users, { type: 'user.create', name: '壇務甲', pin: '1234' }, owner, deps);
+  const r = Auth.applyUserOp(users, { type: 'user.create', name: '壇務甲', pin: '123456' }, owner, deps);
   users = r.users;
   const u = users[0];
   assert.equal(u.role, 'staff');
-  assert.equal(JSON.stringify(u).includes('1234'), false, 'PIN 不可明文儲存');
-  assert.ok(Auth.verifyPin(u, '1234', sha256Hex));
+  assert.equal(JSON.stringify(u).includes('123456'), false, 'PIN 不可明文儲存');
+  assert.ok(Auth.verifyPin(u, '123456', sha256Hex));
   assert.equal(Auth.verifyPin(u, '1235', sha256Hex), false);
   assert.equal(Auth.publicUser(u).pinHash, undefined);
 
   const actor = Auth.publicUser(u);
-  assert.throws(() => Auth.applyUserOp(users, { type: 'user.create', name: 'x', pin: '1111' }, actor, deps), forbidden);
-  assert.throws(() => Auth.applyUserOp(users, { type: 'self.changePin', oldPin: '0000', newPin: '5678' }, actor, deps), (e) => e.code === 'WRONG_PIN');
-  users = Auth.applyUserOp(users, { type: 'self.changePin', oldPin: '1234', newPin: '5678' }, actor, deps).users;
-  assert.ok(Auth.verifyPin(users[0], '5678', sha256Hex));
+  assert.throws(() => Auth.applyUserOp(users, { type: 'user.create', name: 'x', pin: '111111' }, actor, deps), forbidden);
+  assert.throws(() => Auth.applyUserOp(users, { type: 'self.changePin', oldPin: '0000', newPin: '567890' }, actor, deps), (e) => e.code === 'WRONG_PIN');
+  users = Auth.applyUserOp(users, { type: 'self.changePin', oldPin: '123456', newPin: '567890' }, actor, deps).users;
+  assert.ok(Auth.verifyPin(users[0], '567890', sha256Hex));
 
-  assert.throws(() => Auth.applyUserOp(users, { type: 'user.create', name: '壇務甲', pin: '1111' }, owner, deps), (e) => e.code === 'DUPLICATE');
+  assert.throws(() => Auth.applyUserOp(users, { type: 'user.create', name: '壇務甲', pin: '111111' }, owner, deps), (e) => e.code === 'DUPLICATE');
   assert.throws(() => Auth.applyUserOp(users, { type: 'user.create', name: '乙', pin: '12' }, owner, deps), (e) => e.code === 'INVALID_PIN');
   users = Auth.applyUserOp(users, { type: 'user.update', id: u.id, patch: { disabled: true } }, owner, deps).users;
   assert.equal(users[0].disabled, true);
-  assert.throws(() => Auth.applyUserOp(users, { type: 'self.changePin', oldPin: '1', newPin: '2222' }, owner, deps), forbidden);
+  assert.throws(() => Auth.applyUserOp(users, { type: 'self.changePin', oldPin: '1', newPin: '222222' }, owner, deps), forbidden);
 });
 
 // 模擬前端：保留上次的資料，送出 since，把回應合併回完整資料

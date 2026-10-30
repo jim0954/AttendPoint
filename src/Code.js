@@ -6,7 +6,7 @@
  * 網頁放在 GitHub Pages，以 fetch POST 呼叫這裡的 doPost（見 src/ui/backend.js）。
  *
  * Script Properties（專案設定 → 指令碼屬性）：
- *   OWNER_PIN       擁有者主帳號的 PIN（4–8 位數字，必填）
+ *   OWNER_PIN       擁有者主帳號的 PIN（6–8 位數字，必填；建議 8 位）
  *   OWNER_NAME      擁有者主帳號顯示名稱（選填，預設「擁有者」）
  *   SPREADSHEET_ID  資料存放的試算表 ID（選填；從試算表建立的專案可省略）
  *   USERS…          壇務帳號（USERS、USERS_2…、USERS_PARTS，由系統自動維護，請勿手動修改）
@@ -290,6 +290,7 @@ function checkPin_(user, pin) {
   if (user.builtin) {
     const ownerPin = props_().getProperty('OWNER_PIN');
     if (!ownerPin) throw appError_('NOT_CONFIGURED', '尚未設定擁有者 PIN，請在 Script Properties 設定 OWNER_PIN');
+    if (!/^\d{6,8}$/.test(ownerPin)) throw appError_('NOT_CONFIGURED', '擁有者 PIN 太短，請到 Apps Script 的指令碼屬性把 OWNER_PIN 改成 6–8 位數字');
     return AttendAuth.verifyPin(
       { salt: 'builtin', pinHash: AttendAuth.hashPin(ownerPin, 'builtin', sha256Hex_) },
       pin,
@@ -300,16 +301,26 @@ function checkPin_(user, pin) {
 }
 
 /** 由 token 取得登入者；沒有 token 視為訪客（null）。token 無效時丟出 SESSION_EXPIRED。 */
+// 登入時記下 PIN 的指紋：PIN 改了（包括在指令碼屬性改 OWNER_PIN），之前登入的裝置都要重新登入
+function pinStamp_(user) {
+  if (user.builtin) return sha256Hex_('owner-pin:' + (props_().getProperty('OWNER_PIN') || '')).slice(0, 16);
+  return String(user.pinHash || '').slice(0, 16);
+}
+
+function tokenValue_(user) {
+  return user.id + ':' + pinStamp_(user);
+}
+
 function userFromToken_(token) {
   if (!token) return null;
   const key = 'tok:' + token;
-  const userId = cache_().get(key);
-  const user = userId ? findUser_(userId) : null;
-  if (!user || user.disabled) {
+  const value = cache_().get(key) || '';
+  const user = findUser_(value.split(':')[0]);
+  if (!user || user.disabled || value !== tokenValue_(user)) {
     cache_().remove(key);
     throw appError_('SESSION_EXPIRED', '登入已逾時，請重新登入');
   }
-  cache_().put(key, userId, TOKEN_TTL); // 使用中自動延長
+  cache_().put(key, value, TOKEN_TTL); // 使用中自動延長
   return AttendAuth.publicUser(user);
 }
 
@@ -336,17 +347,21 @@ function apiLogin(userId, pin) {
     // 帳號 id 很短；過長的值（快取鍵上限 250 字）直接當成帳號不正確
     if (typeof userId !== 'string' || userId.length > 64) throw appError_('WRONG_PIN', '帳號或 PIN 碼不正確');
     const failKey = 'fail:' + userId;
-    const fails = Number(cache_().get(failKey) || 0);
-    if (fails >= MAX_FAILS) throw appError_('LOCKED', '嘗試次數過多，請 15 分鐘後再試');
+    // 先在鎖內把這次嘗試記上去，再比對 PIN：同時送出大量登入請求也只有前 5 次會被比對
+    const fails = withLock_(function () {
+      const n = Number(cache_().get(failKey) || 0);
+      if (n >= MAX_FAILS) throw appError_('LOCKED', '嘗試次數過多，請 15 分鐘後再試');
+      cache_().put(failKey, String(n + 1), FAIL_WINDOW);
+      return n;
+    });
     const user = findUser_(userId);
     if (!user || user.disabled || !checkPin_(user, pin)) {
-      cache_().put(failKey, String(fails + 1), FAIL_WINDOW);
       const left = MAX_FAILS - fails - 1;
       throw appError_('WRONG_PIN', left > 0 ? `帳號或 PIN 碼不正確（還可以再試 ${left} 次）` : '嘗試次數過多，請 15 分鐘後再試');
     }
     cache_().remove(failKey);
     const token = newToken_();
-    cache_().put('tok:' + token, user.id, TOKEN_TTL);
+    cache_().put('tok:' + token, tokenValue_(user), TOKEN_TTL);
     return { token: token, user: AttendAuth.publicUser(user) };
   });
 }
@@ -419,6 +434,11 @@ function apiUserOp(token, op) {
         now: nowIso_
       });
       saveUsers_(r.users);
+      // 自己改 PIN：這台裝置繼續保持登入，其他裝置要用新 PIN 重新登入
+      if (op.type === 'self.changePin') {
+        const me = r.users.find(function (u) { return u.id === user.id; });
+        cache_().put('tok:' + token, tokenValue_(me), TOKEN_TTL);
+      }
       // 停用或刪除的帳號，下次呼叫時 token 會自動失效（userFromToken_ 會檢查）
       const users = user.role === 'owner' ? [builtinOwner_()].concat(r.users).map(AttendAuth.publicUser) : null;
       return { result: r.result, users: users };

@@ -442,7 +442,7 @@
         <p class="muted" style="margin:0">這是單機版第一次使用。請設定擁有者名稱與 PIN 碼，之後可以在「擁有者」分頁建立壇務帳號。</p>
         <form class="stack" data-setup>
           <div class="field"><label>擁有者名稱</label><input class="input" name="name" value="擁有者" maxlength="20" /></div>
-          <div class="field"><label>PIN 碼（4–8 位數字）</label><input class="input" name="pin" type="password" inputmode="numeric" maxlength="8" autofocus /></div>
+          <div class="field"><label>PIN 碼（6–8 位數字）</label><input class="input" name="pin" type="password" inputmode="numeric" maxlength="8" autofocus /></div>
           <div class="field"><label>再輸入一次</label><input class="input" name="pin2" type="password" inputmode="numeric" maxlength="8" /></div>
           <button type="submit" class="btn btn-primary btn-block">完成設定並登入</button>
         </form>`,
@@ -495,7 +495,7 @@
       body: App.html`
         <form class="stack">
           <div class="field"><label>目前的 PIN</label><input class="input" name="oldPin" type="password" inputmode="numeric" maxlength="8" autofocus /></div>
-          <div class="field"><label>新的 PIN（4–8 位數字）</label><input class="input" name="newPin" type="password" inputmode="numeric" maxlength="8" /></div>
+          <div class="field"><label>新的 PIN（6–8 位數字）</label><input class="input" name="newPin" type="password" inputmode="numeric" maxlength="8" /></div>
           <div class="field"><label>再輸入一次</label><input class="input" name="newPin2" type="password" inputmode="numeric" maxlength="8" /></div>
           <button type="submit" class="btn btn-primary btn-block">儲存</button>
         </form>`,

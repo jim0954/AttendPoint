@@ -129,7 +129,7 @@
             <option value="owner" ${u && u.role === 'owner' ? 'selected' : ''}>擁有者（全部權限）</option>
           </select>
         </div>
-        ${u ? '' : html`<div class="field"><label>PIN 碼（4–8 位數字）</label><input class="input" name="pin" type="password" inputmode="numeric" maxlength="8" /></div>`}
+        ${u ? '' : html`<div class="field"><label>PIN 碼（6–8 位數字）</label><input class="input" name="pin" type="password" inputmode="numeric" maxlength="8" /></div>`}
         <div class="field"><label>對應服務人員（選填）</label>
           <select class="select" name="staffId">
             <option value="">（無）</option>
@@ -178,7 +178,7 @@
         title: '重設 PIN：' + u.name,
         body: html`
           <form class="stack">
-            <div class="field"><label>新的 PIN（4–8 位數字）</label><input class="input" name="pin" type="password" inputmode="numeric" maxlength="8" autofocus /></div>
+            <div class="field"><label>新的 PIN（6–8 位數字）</label><input class="input" name="pin" type="password" inputmode="numeric" maxlength="8" autofocus /></div>
             <button type="submit" class="btn btn-primary">重設</button>
           </form>`,
         onMount: function (m, close) {

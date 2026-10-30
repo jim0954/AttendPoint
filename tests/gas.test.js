@@ -27,14 +27,14 @@ function setup() {
     type: 'class.create', name: '兒童讀經班', idPrefix: 'K', teams: ['孝順隊'],
     addRules: [{ label: '準時報到', points: 10, isCheckin: true }]
   })).result;
-  const created = ok(g.apiUserOp(owner, { type: 'user.create', name: '壇務甲', pin: '1234' })).result;
-  const staff = ok(g.apiLogin(created.id, '1234')).token;
+  const created = ok(g.apiUserOp(owner, { type: 'user.create', name: '壇務甲', pin: '123456' })).result;
+  const staff = ok(g.apiLogin(created.id, '123456')).token;
   return Object.assign(env, { g, owner, staff, staffUserId: created.id, classId: cls.id });
 }
 
 test('沒有設定 OWNER_PIN 時無法登入，並提示設定方式', () => {
   const { gas } = createGas({});
-  fail(gas.apiLogin('U-owner', '1234'), 'NOT_CONFIGURED');
+  fail(gas.apiLogin('U-owner', '123456'), 'NOT_CONFIGURED');
 });
 
 test('登入：PIN 錯誤會倒數，錯 5 次鎖定', () => {
@@ -42,6 +42,55 @@ test('登入：PIN 錯誤會倒數，錯 5 次鎖定', () => {
   for (let i = 0; i < 4; i++) fail(g.apiLogin('U-owner', '000000'), 'WRONG_PIN');
   fail(g.apiLogin('U-owner', '000000'), 'WRONG_PIN');
   fail(g.apiLogin('U-owner', '246810'), 'LOCKED');
+});
+
+test('登入：比對 PIN 之前就先記下這次嘗試（同時送出大量請求也無法超過 5 次）', () => {
+  const { g, cache } = setup();
+  const seen = [];
+  const check = g.checkPin_;
+  g.checkPin_ = function () { seen.push(cache['fail:U-owner']); return false; };
+  for (let i = 0; i < 6; i++) g.apiLogin('U-owner', '000000');
+  g.checkPin_ = check;
+  assert.deepEqual(seen, ['1', '2', '3', '4', '5'], '第 6 次在比對前就被擋下');
+  fail(g.apiLogin('U-owner', '246810'), 'LOCKED');
+});
+
+test('登入：擁有者 PIN 少於 6 位數時提示修改；改版前的 4 位數壇務 PIN 仍可登入', () => {
+  const { gas } = createGas({ OWNER_PIN: '2468' });
+  const res = gas.apiLogin('U-owner', '2468');
+  fail(res, 'NOT_CONFIGURED');
+  assert.match(res.message, /6–8 位數字/);
+  const { g, owner, props } = setup();
+  fail(g.apiUserOp(owner, { type: 'user.create', name: '乙', pin: '1234' }), 'INVALID_PIN');
+  // 舊帳號：直接放一個以 4 位數 PIN 雜湊的帳號
+  const users = JSON.parse(props.USERS);
+  const legacy = Object.assign({}, users[0], { id: 'U-legacy', name: '舊帳號', salt: 's' });
+  legacy.pinHash = g.AttendAuth.hashPin('1234', 's', g.sha256Hex_);
+  g.saveUsers_(users.concat([legacy]));
+  ok(g.apiLogin('U-legacy', '1234'));
+});
+
+test('PIN 改了之後，之前登入的裝置都要重新登入（自己改 PIN 的這台除外）', () => {
+  const { g, owner, staff, staffUserId, props } = setup();
+  // 壇務自己改 PIN：這台保持登入，另一台失效
+  const other = ok(g.apiLogin(staffUserId, '123456')).token;
+  ok(g.apiUserOp(staff, { type: 'self.changePin', oldPin: '123456', newPin: '567890' }));
+  ok(g.apiGetState(staff));
+  assert.equal(ok(g.apiGetState(other)).sessionExpired, true);
+  // 擁有者重設壇務 PIN：壇務的登入失效
+  ok(g.apiUserOp(owner, { type: 'user.resetPin', id: staffUserId, pin: '135790' }));
+  fail(g.apiApply(staff, { type: 'gift.create', name: 'x', cost: 1 }), 'SESSION_EXPIRED');
+  // 在指令碼屬性改 OWNER_PIN：擁有者的登入失效
+  ok(g.apiListUsers(owner));
+  props.OWNER_PIN = '97531086';
+  fail(g.apiListUsers(owner), 'SESSION_EXPIRED');
+  ok(g.apiLogin('U-owner', '97531086'));
+});
+
+test('改版前的登入（token 只記帳號 id）需要重新登入', () => {
+  const { g, cache } = setup();
+  cache['tok:legacy'] = 'U-owner';
+  fail(g.apiListUsers('legacy'), 'SESSION_EXPIRED');
 });
 
 test('登入清單只有名稱與角色，不含 PIN 資訊', () => {
@@ -100,16 +149,16 @@ test('停用帳號後，原本的登入立即失效', () => {
   const { g, owner, staff, staffUserId } = setup();
   ok(g.apiUserOp(owner, { type: 'user.update', id: staffUserId, patch: { disabled: true } }));
   fail(g.apiApply(staff, { type: 'gift.create', name: 'x', cost: 1 }), 'SESSION_EXPIRED');
-  fail(g.apiLogin(staffUserId, '1234'), 'WRONG_PIN');
+  fail(g.apiLogin(staffUserId, '123456'), 'WRONG_PIN');
 });
 
 test('帳號管理：壇務不能管理帳號，但可以改自己的 PIN；PIN 不以明文儲存', () => {
   const { g, owner, staff, staffUserId, props } = setup();
   fail(g.apiListUsers(staff), 'FORBIDDEN');
-  fail(g.apiUserOp(staff, { type: 'user.create', name: '乙', pin: '1111' }), 'FORBIDDEN');
-  ok(g.apiUserOp(staff, { type: 'self.changePin', oldPin: '1234', newPin: '5678' }));
-  ok(g.apiLogin(staffUserId, '5678'));
-  assert.equal(props.USERS.includes('5678'), false);
+  fail(g.apiUserOp(staff, { type: 'user.create', name: '乙', pin: '111111' }), 'FORBIDDEN');
+  ok(g.apiUserOp(staff, { type: 'self.changePin', oldPin: '123456', newPin: '567890' }));
+  ok(g.apiLogin(staffUserId, '567890'));
+  assert.equal(props.USERS.includes('567890'), false);
   fail(g.apiUserOp(owner, { type: 'user.delete', id: 'U-owner' }), 'FORBIDDEN');
   assert.equal(ok(g.apiListUsers(owner)).users.length, 2);
 });
@@ -157,11 +206,11 @@ test('帳號：超過單一屬性 9 KB 時分段存放，刪減後清掉多的�
   const env = setup();
   const { g, owner, props } = env;
   const ids = [];
-  for (let i = 0; i < 60; i++) ids.push(ok(g.apiUserOp(owner, { type: 'user.create', name: '範例壇務' + i, pin: '1234' })).result.id);
+  for (let i = 0; i < 60; i++) ids.push(ok(g.apiUserOp(owner, { type: 'user.create', name: '範例壇務' + i, pin: '123456' })).result.id);
   assert.ok(Number(props.USERS_PARTS) >= 3, props.USERS_PARTS);
   const list = ok(g.apiListUsers(owner)).users;
   assert.equal(list.filter((u) => u.name.indexOf('範例壇務') === 0).length, 60);
-  ok(g.apiLogin(ids[59], '1234'));
+  ok(g.apiLogin(ids[59], '123456'));
 
   // 舊版：只有 USERS、沒有 USERS_PARTS
   const users = JSON.parse(Array.from({ length: Number(props.USERS_PARTS) }, (_, i) => props[i ? 'USERS_' + (i + 1) : 'USERS']).join(''));
@@ -174,14 +223,14 @@ test('帳號：超過單一屬性 9 KB 時分段存放，刪減後清掉多的�
   delete props.USERS_PARTS;
   props.USERS = JSON.stringify(users.slice(0, 2));
   assert.equal(ok(g.apiListUsers(owner)).users.length, 3);
-  ok(g.apiUserOp(owner, { type: 'user.create', name: '新帳號', pin: '1234' }));
+  ok(g.apiUserOp(owner, { type: 'user.create', name: '新帳號', pin: '123456' }));
   assert.equal(props.USERS_PARTS, '1');
 });
 
 test('登入：過長或不是文字的帳號 id 回覆帳號不正確', () => {
   const { g } = setup();
-  fail(g.apiLogin('U-' + 'x'.repeat(300), '1234'), 'WRONG_PIN');
-  fail(g.apiLogin({ id: 1 }, '1234'), 'WRONG_PIN');
+  fail(g.apiLogin('U-' + 'x'.repeat(300), '123456'), 'WRONG_PIN');
+  fail(g.apiLogin({ id: 1 }, '123456'), 'WRONG_PIN');
 });
 
 test('大量資料會分段存放在多個儲存格', () => {
