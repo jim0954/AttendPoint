@@ -163,7 +163,7 @@
   App.refresh = function (silent) {
     if (App.isBusy()) return Promise.resolve();
     return App.s.backend.getState().then(function (res) {
-      if (App.isBusy()) return;
+      if (App.isBusy() || res.stale) return;
       App.loadData(res.state);
       if (res.sessionExpired) {
         App.setUser(null);

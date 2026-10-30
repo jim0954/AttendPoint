@@ -28,6 +28,8 @@
     this.token = null;
     this.base = null; // 上次後端確認的資料，用來只下載變動（見 AttendAuth.syncView）
     this.baseView = null;
+    this.seq = 0;      // 每次讀寫資料的請求編號
+    this.latest = 0;   // 已採用的回應中最新的請求編號
     try { this.token = localStorage.getItem('attendpoint_token'); } catch (e) {}
   }
 
@@ -65,7 +67,19 @@
     const args = Array.prototype.slice.call(arguments, 1);
     const base = this.base;
     const since = AttendAuth.sinceOf(base, this.baseView);
+    const seq = ++this.seq;
     return this.call.apply(this, [name].concat(args, [since])).then(function (res) {
+      // 比較晚送出的請求已經先回來（例如背景重新整理還在路上時點了名）：這個回應是舊的，不採用，
+      // 否則會把剛點的名蓋掉、登入登出後的身分也會被舊回應改回去
+      if (seq < self.latest) {
+        res.stale = true;
+        res.state = self.base;
+        res.view = self.baseView;
+        delete res.delta;
+        delete res.unchanged;
+        return res;
+      }
+      self.latest = seq;
       try {
         res.state = AttendAuth.mergeView(base, res);
       } catch (e) {
@@ -128,7 +142,11 @@
   };
   GasBackend.prototype.importState = function (raw) {
     const self = this;
-    return this.call('apiImportState', this.token, raw).then(function (res) { return self.keep(res); });
+    const seq = ++this.seq;
+    return this.call('apiImportState', this.token, raw).then(function (res) {
+      self.latest = Math.max(self.latest, seq);
+      return self.keep(res);
+    });
   };
   GasBackend.prototype.rebuildReports = function () { return this.call('apiRebuildReports', this.token); };
   GasBackend.prototype.getLogo = function () {

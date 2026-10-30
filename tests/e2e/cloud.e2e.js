@@ -154,6 +154,34 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await card(page, '陳大同').locator('button', { hasText: '已報到' }).waitFor();
   });
 
+  await t.test('背景重新整理還在路上時加分：較慢回來的舊回應不會蓋掉剛加的分', async () => {
+    await page.evaluate(() => {
+      // 讓下一次讀取在後台處理完後，晚 1 秒才回到網頁（比之後送出的加分還晚回來）
+      const fetch0 = window.fetch;
+      window.__slowDone = false;
+      window.fetch = function (url, opts) {
+        if (opts.body.indexOf('"apiGetState"') === -1) return fetch0.apply(this, arguments);
+        window.fetch = fetch0;
+        return fetch0.apply(this, arguments).then(function (r) {
+          return new Promise(function (resolve) { setTimeout(function () { window.__slowDone = true; resolve(r); }, 1000); });
+        });
+      };
+      App.refresh(true);
+      const s = App.s.data.students.find((x) => x.name === '王小明');
+      App.run({ type: 'points.award', studentId: s.id, date: App.s.date, points: 2, reason: '慢回應測試' });
+    });
+    await page.waitForFunction(() => window.__slowDone);
+    await idle(page);
+    const has = () => page.evaluate(() => App.s.data.logs.some((l) => l.reason.indexOf('慢回應測試') !== -1));
+    assert.equal(await has(), true);
+    assert.equal(await page.evaluate(() => JSON.stringify(App.s.data) === JSON.stringify(readState_())), true);
+    // 下一次重新整理仍是「沒有變動」：網頁手上的版本沒有被舊回應改回去
+    await calls();
+    await page.click('[data-action="refresh"]');
+    await page.waitForFunction(() => window.__calls.length > 0);
+    assert.deepEqual(await calls(), [{ name: 'apiGetState', kind: 'unchanged' }]);
+  });
+
   await t.test('登入逾時：操作時提示重新登入，回到訪客畫面', async () => {
     await page.evaluate(() => CacheService.getScriptCache().remove('tok:' + App.s.backend.token));
     await page.click('#view [data-action="open-batch"]');
