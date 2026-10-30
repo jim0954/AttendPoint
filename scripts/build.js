@@ -35,7 +35,8 @@ function inlineScript(name, code) {
 /** 後台程式指紋：任何後台檔案改變（包含共用的資料規則）都會不同 */
 function backendVersion() {
   const hash = crypto.createHash('sha256');
-  BACKEND_FILES.forEach((f) => hash.update(read(path.join(SRC, f))));
+  // 統一換行符號：Windows 檢出（CRLF）與 GitHub Actions（LF）建置出的指紋才會相同
+  BACKEND_FILES.forEach((f) => hash.update(read(path.join(SRC, f)).replace(/\r\n/g, '\n')));
   return hash.digest('hex').slice(0, 12);
 }
 

@@ -142,6 +142,48 @@ test('報表工作表：學員總表包含計算後的分數', () => {
   fail(g.apiRebuildReports(staff), 'FORBIDDEN');
 });
 
+test('報表工作表：開頭像公式的文字以純文字寫入，數字不變', () => {
+  const { g, owner, staff, classId, sheets } = setup();
+  const stu = ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name: '=HYPERLINK("x")' })).result;
+  ok(g.apiApply(staff, { type: 'points.award', studentId: stu.id, points: 3, reason: '-遲到' }));
+  ok(g.apiRebuildReports(owner));
+  const row = sheets['學員總表'].cells()[1];
+  assert.equal(row[3], `'=HYPERLINK("x")`);
+  assert.equal(row[4], 3);
+  assert.ok(sheets['流水帳'].cells().some((r) => r.indexOf("'-遲到") !== -1));
+});
+
+test('帳號：超過單一屬性 9 KB 時分段存放，刪減後清掉多的段落；舊版整份 USERS 也讀得到', () => {
+  const env = setup();
+  const { g, owner, props } = env;
+  const ids = [];
+  for (let i = 0; i < 60; i++) ids.push(ok(g.apiUserOp(owner, { type: 'user.create', name: '範例壇務' + i, pin: '1234' })).result.id);
+  assert.ok(Number(props.USERS_PARTS) >= 3, props.USERS_PARTS);
+  const list = ok(g.apiListUsers(owner)).users;
+  assert.equal(list.filter((u) => u.name.indexOf('範例壇務') === 0).length, 60);
+  ok(g.apiLogin(ids[59], '1234'));
+
+  // 舊版：只有 USERS、沒有 USERS_PARTS
+  const users = JSON.parse(Array.from({ length: Number(props.USERS_PARTS) }, (_, i) => props[i ? 'USERS_' + (i + 1) : 'USERS']).join(''));
+  // 帳號變少：多的段落刪掉
+  g.saveUsers_(users.slice(0, 3));
+  assert.equal(props.USERS_PARTS, '1');
+  assert.equal(Object.keys(props).filter((k) => /^USERS_\d/.test(k)).length, 0);
+  assert.equal(ok(g.apiListUsers(owner)).users.length, 4); // 含擁有者
+  // 舊版：只有 USERS、沒有 USERS_PARTS
+  delete props.USERS_PARTS;
+  props.USERS = JSON.stringify(users.slice(0, 2));
+  assert.equal(ok(g.apiListUsers(owner)).users.length, 3);
+  ok(g.apiUserOp(owner, { type: 'user.create', name: '新帳號', pin: '1234' }));
+  assert.equal(props.USERS_PARTS, '1');
+});
+
+test('登入：過長或不是文字的帳號 id 回覆帳號不正確', () => {
+  const { g } = setup();
+  fail(g.apiLogin('U-' + 'x'.repeat(300), '1234'), 'WRONG_PIN');
+  fail(g.apiLogin({ id: 1 }, '1234'), 'WRONG_PIN');
+});
+
 test('大量資料會分段存放在多個儲存格', () => {
   const env = setup();
   const { g, owner, classId } = env;

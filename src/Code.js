@@ -9,7 +9,7 @@
  *   OWNER_PIN       擁有者主帳號的 PIN（4–8 位數字，必填）
  *   OWNER_NAME      擁有者主帳號顯示名稱（選填，預設「擁有者」）
  *   SPREADSHEET_ID  資料存放的試算表 ID（選填；從試算表建立的專案可省略）
- *   USERS           壇務帳號（由系統自動維護，請勿手動修改）
+ *   USERS…          壇務帳號（USERS、USERS_2…、USERS_PARTS，由系統自動維護，請勿手動修改）
  *   DATA_SHEET      目前使用中的資料工作表（由系統自動維護，請勿手動修改）
  *   BACKUP_KEEP     自動保留的備份份數（選填，預設 10；跨年度結算的備份一律保留，不計入）
  *
@@ -244,13 +244,31 @@ function writeState_(state) {
 
 // ---------- 帳號 ----------
 
+// 單一指令碼屬性最多 9 KB（約 35 個帳號），帳號清單分段存在 USERS、USERS_2、USERS_3…，
+// USERS_PARTS 記錄段數（沒有這個屬性時是舊版，整份都在 USERS）
+const USERS_PART_CHARS = 2500; // 中文一字 3 bytes，2500 字以內一定不超過 9 KB
+
 function storedUsers_() {
-  const raw = props_().getProperty('USERS');
+  const props = props_();
+  const parts = Number(props.getProperty('USERS_PARTS') || 1);
+  let raw = props.getProperty('USERS') || '';
+  for (let i = 2; i <= parts; i++) raw += props.getProperty('USERS_' + i) || '';
   return raw ? JSON.parse(raw) : [];
 }
 
 function saveUsers_(users) {
-  props_().setProperty('USERS', JSON.stringify(users));
+  const props = props_();
+  const json = JSON.stringify(users);
+  const before = Number(props.getProperty('USERS_PARTS') || 1);
+  const values = { USERS: json.slice(0, USERS_PART_CHARS) };
+  let parts = 1;
+  while (parts * USERS_PART_CHARS < json.length) {
+    parts++;
+    values['USERS_' + parts] = json.slice((parts - 1) * USERS_PART_CHARS, parts * USERS_PART_CHARS);
+  }
+  values.USERS_PARTS = String(parts);
+  props.setProperties(values); // 一次寫入，不會只寫到一半
+  for (let i = parts + 1; i <= before; i++) props.deleteProperty('USERS_' + i);
 }
 
 function builtinOwner_() {
@@ -315,6 +333,8 @@ function apiLoginOptions() {
 
 function apiLogin(userId, pin) {
   return respond_(function () {
+    // 帳號 id 很短；過長的值（快取鍵上限 250 字）直接當成帳號不正確
+    if (typeof userId !== 'string' || userId.length > 64) throw appError_('WRONG_PIN', '帳號或 PIN 碼不正確');
     const failKey = 'fail:' + userId;
     const fails = Number(cache_().get(failKey) || 0);
     if (fails >= MAX_FAILS) throw appError_('LOCKED', '嘗試次數過多，請 15 分鐘後再試');
@@ -485,7 +505,10 @@ function writeTable_(name, header, rows) {
   const ss = spreadsheet_();
   const sheet = ss.getSheetByName(name) || ss.insertSheet(name);
   sheet.clear();
-  const values = [header].concat(rows);
+  // 開頭是 = + - @ 的文字（例如姓名、加分事由）會被試算表當成公式，前面補 ' 當純文字
+  const values = [header].concat(rows).map(function (row) {
+    return row.map(function (v) { return typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v; });
+  });
   sheet.getRange(1, 1, values.length, header.length).setValues(values);
   sheet.setFrozenRows(1);
 }

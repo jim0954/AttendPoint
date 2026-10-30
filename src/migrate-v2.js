@@ -341,6 +341,11 @@
   function loadAny(raw, ctxOverrides) {
     const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (data && data.schemaVersion === Store.SCHEMA_VERSION) {
+      // 備份檔被手動改壞時不要寫進去，否則之後每次讀取都會出錯
+      const missing = ['classes', 'sessions', 'staff', 'students', 'gifts', 'logs'].filter(function (k) { return !Array.isArray(data[k]); });
+      if (!data.meta || typeof data.meta !== 'object' || missing.length) {
+        throw new Store.StoreError('UNKNOWN_FORMAT', '備份檔內容不完整（' + (missing.join('、') || 'meta') + '），無法匯入');
+      }
       return { state: Store.upgrade(data), migratedFrom: null, report: null };
     }
     if (isV2(data)) {

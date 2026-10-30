@@ -177,6 +177,11 @@ test('單機版', { skip: SKIP }, async (t) => {
     await m.locator('[data-close]').first().click();
   });
 
+  await t.test('CSV 匯出：開頭像公式的文字前面補單引號，數字不變', async () => {
+    const csv = await page.evaluate(() => App.toCsv([['=1+1', '@x', '-遲到', -5, '王小明']]));
+    assert.equal(csv, "\ufeff'=1+1,'@x,'-遲到,-5,王小明");
+  });
+
   await t.test('沒有程式錯誤', () => {
     assert.deepEqual(page.errors, []);
   });

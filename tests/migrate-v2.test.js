@@ -112,4 +112,9 @@ test('loadAny：v3 原樣回傳、v2 自動移轉、其他格式報錯', () => {
   assert.equal(r.state.schemaVersion, 3);
   assert.throws(() => Migrate.loadAny('{"foo":1}'), (e) => e.code === 'UNKNOWN_FORMAT');
   assert.throws(() => Migrate.loadAny('{"schemaVersion":99}'), (e) => e.code === 'NEWER_VERSION');
+  // v3 備份被改壞（缺少清單或 meta）：拒絕匯入
+  const broken = JSON.parse(JSON.stringify(v3));
+  delete broken.logs;
+  assert.throws(() => Migrate.loadAny(JSON.stringify(broken)), (e) => e.code === 'UNKNOWN_FORMAT' && /logs/.test(e.message));
+  assert.throws(() => Migrate.loadAny(JSON.stringify(Object.assign({}, v3, { meta: null }))), (e) => e.code === 'UNKNOWN_FORMAT');
 });

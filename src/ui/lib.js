@@ -239,7 +239,9 @@
   App.toCsv = function (rows) {
     return '﻿' + rows.map(function (r) {
       return r.map(function (v) {
-        const s = String(v === undefined || v === null ? '' : v);
+        let s = String(v === undefined || v === null ? '' : v);
+        // 開頭是 = + - @ 的文字在 Excel 會被當成公式執行，前面補 ' 當純文字（數字不受影響）
+        if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
         return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
       }).join(',');
     }).join('\r\n');
