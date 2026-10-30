@@ -35,5 +35,6 @@
 - 6-2：改成與 CarTracker 相同的架構——網頁放 GitHub Pages（Actions 自動發布），Apps Script 只當後台（`doPost`），網頁比對後台版本指紋。
 - 6-3：服務人員在點名頁直接點名（`session.duty`，記入課次執勤 `dutyStaffIds`）。
 - 6-4：LOGO 由擁有者在「系統與備份」上傳，存在後台（`apiGetLogo`／`apiSetLogo`），不放進 repo。
+- 6-5：服務人員職務固定為點傳師、主壇務、副主壇務、護持壇務（`AttendStore.STAFF_ROLES`，後台也檢查）。6-6～6-8：外部審查（`REQUEST.md`，結果 `FINDINGS.md` 不進 repo）與修正，處理結果記在 `REQUEST.md` 的「已知問題」。
 - 尚未部署到真正的 Google Apps Script 實測（階段 4 其餘測試、階段 5 GitHub 門面與部署、階段 6 佛堂試行）。
 - 根目錄 `AttendPoint.html` 是 v2 舊版，`tests/migrate-v2.test.js` 用它當移轉測試資料。
