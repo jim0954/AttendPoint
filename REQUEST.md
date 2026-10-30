@@ -10,6 +10,7 @@
   - 標示 **「確定」** 或 **「推測」**：確定 = 有程式碼依據，或可以用測試、模擬環境重現；推測 = 需要真實 Google Apps Script 環境、Google 文件或更多資訊才能確認，請寫出需要確認什麼。
 - 結果寫到 repo 根目錄的新檔案：`FINDINGS.md`（不要 commit）。
 - 下面的「已驗證事項」僅供參考，請仍然獨立判斷，不要因為列為已驗證就略過。
+- **安全性是這次的必審項目**：下面「安全性審查（必做）」的每一點都要有結論（有問題就列出；沒問題也請寫一句「已檢查，未發現問題」與檢查方式），不能只看程式正確性。
 - 回覆與結果檔請用**繁體中文**。
 - repo 是公開的，結果中不要寫入真實學員資料、PIN 或任何憑證；程式碼中的名字都是假資料。
 
@@ -18,7 +19,7 @@
 - 佛堂班程使用的點名、加減分、禮品兌換系統。多位服務人員用手機同時操作，取代原本單機版的 v2（根目錄 `AttendPoint.html`）。
 - **網頁**放在 GitHub Pages：原生 JavaScript、沒有框架，建置時合併成單一 HTML；推送到 `main` 由 `.github/workflows/pages.yml` 自動測試、建置、發布。
 - **後台**是 Google Apps Script（`src/Code.js`）：網頁以 `fetch` POST 純文字 JSON 呼叫 `doPost`。部署的執行身分為部署者，存取權為「所有人」，所以後台網址是公開的。
-- **資料**存在部署者的 Google 試算表隱藏工作表，以 JSON 分段存放：`_data` 和 `_data_2` 輪流寫入，Script Properties 的 `DATA_SHEET` 指向目前使用中的那個；另有 `_backup_*` 備份、`_logo` 存 LOGO。帳號存在 Script Properties 的 `USERS`。
+- **資料**存在部署者的 Google 試算表隱藏工作表，以 JSON 分段存放：`_data` 和 `_data_2` 輪流寫入，Script Properties 的 `DATA_SHEET` 指向目前使用中的那個；另有 `_backup_*` 備份、`_logo` 存 LOGO。帳號存在 Script Properties 的 `USERS`（帳號多時分段為 `USERS_2`…）。
 - **三級權限**：訪客（唯讀、學員名字遮蔽）／壇務（不能刪除）／擁有者（全部）。帳號以 PIN 登入。**權限一律由後台檢查**；網頁上的檢查只用來決定按鈕顯示與否。
 - `src/store.js`、`src/auth.js`、`src/migrate-v2.js` **前後端共用**：網頁用來做樂觀更新，後台用來做最終驗證與寫入。
 - 另有單機版 `dist/AttendPoint.html`：同一套介面與規則，資料存在瀏覽器 localStorage。
@@ -28,14 +29,14 @@
 
 - **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-8 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
 - **排除**：根目錄 `AttendPoint.html`（舊版 v2，只當移轉測試資料）、`dist/`（建置產物，不在 repo 裡）。
-- 主要檔案（總共約 7,700 行，含測試與腳本）：
+- 主要檔案（總共約 8,700 行，含測試與腳本）：
 
 | 區塊 | 檔案 | 內容 |
 |---|---|---|
-| 資料層 | `src/store.js`（1055 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次 |
+| 資料層 | `src/store.js`（1064 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次 |
 | 權限 | `src/auth.js`（324 行） | `authorize`（擁有者限定的操作、壇務只能撤銷自己今天的紀錄、壇務不能移除小隊與規則）、`viewFor`（訪客遮蔽）、`syncView`／`mergeView`（增量同步）、PIN 雜湊、帳號操作 |
-| 移轉 | `src/migrate-v2.js`（362 行） | v2 資料轉換、`loadAny()` |
-| 後台 | `src/Code.js`（551 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長）、錯誤 5 次鎖定、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
+| 移轉 | `src/migrate-v2.js`（367 行） | v2 資料轉換、`loadAny()` |
+| 後台 | `src/Code.js`（574 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長）、錯誤 5 次鎖定、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
 | 介面 | `src/ui/*.js` | `backend.js`（雲端 fetch／單機 localStorage、增量合併）、`app.js`（樂觀更新佇列、外框、LOGO）、`lib.js`（`App.html` 自動跳脫樣板）、各分頁 `view-*.js` |
 | 設定 | `src/config.js` | 後台網址 `GAS_URL`（公開，不是秘密） |
 | 建置與發布 | `scripts/build.js`、`.github/workflows/pages.yml` | 產生單機版、Pages 網頁、後台；後台版本指紋寫進兩邊，網頁比對不同時提示更新後台 |
@@ -96,9 +97,52 @@ npm run e2e
   - 跨年度結算、v2 資料匯入、轉移到公用帳號（`docs/deploy-gas.md` 第 8 節）在真實環境的操作。
   - iOS「加入主畫面」使用 data URI 的 apple-touch-icon。
 
-## 已知問題（前兩次審查找到，請確認或補充）
+## 安全性審查（必做）
 
-第一次審查只看了階段 6-5（職務下拉選單），找到 5 項，都已在階段 6-7、6-8 處理。第二次是全 repo 審查（基準 `0f8c508`），找到 16 項，以下依那次的編號列出。
+### 威脅模型
+
+- **後台網址是公開的**：`src/config.js` 的 `GAS_URL` 寫在公開的 GitHub repo，部署存取權是「所有人」。任何人不用登入就能直接呼叫 `doPost`，可以自己組任何 `{ fn, args }`，也可以大量、並行呼叫。
+- **原始碼是公開的**：攻擊者知道所有規則、驗證方式與錯誤訊息。
+- **使用者**：壇務是佛堂的服務人員，大多在自己的手機上操作，也可能共用佛堂的平板。訪客（未登入）可以看到點名與榮譽榜，所以學員名字要遮蔽。
+- **資料內容**：學員多為兒童，名冊屬於個資，包括姓名、班別、小隊、備註、出席與積分紀錄。
+- **不在範圍內**：Google 帳號本身、Apps Script 平台、部署者的試算表共用設定被盜用。但如果系統的設計讓這些風險變大，仍請指出。
+
+### 必須逐項給出結論
+
+1. **身分驗證與暴力破解**（`src/Code.js` 的 `apiLogin`、`checkPin_`、`userFromToken_`；`src/auth.js` 的 `hashPin`、`verifyPin`、`PIN_RE`）
+   - PIN 只有 4–8 位數字。錯誤 5 次鎖定 15 分鐘的計數存在 CacheService，而且是「讀取 → 比對 PIN → 寫回」，中間沒有加鎖。**並行送出大量登入請求能不能繞過次數限制？** 照這樣算，猜中 4 位數或 6 位數 PIN 需要多久？
+   - 對所有帳號輪流猜（`apiLoginOptions` 會公開帳號清單）、CacheService 提早清除計數，這兩種情況的影響。
+   - 另一面：任何人都能故意輸錯 PIN，把所有帳號鎖住（上次審查第 3 項，評估後暫不修，請判斷理由是否成立）。有沒有兩全的做法？
+   - token：用兩個 UUID 產生、存在 CacheService、6 小時內有使用就自動延長。登出、停用帳號、修改擁有者 PIN（`OWNER_PIN`）後，舊 token 會不會仍然有效？token 存在 localStorage，在共用裝置上的風險。
+2. **授權能否被繞過**（`apiApply` → `AttendAuth.authorize` → `AttendStore.apply`；`apiUserOp` → `applyUserOp`）
+   - 壇務能否自己組 op，做到擁有者才能做的事？例如在 `*.update` 的 patch、`points.*`、`student.import`、`session.save`、`class.update` 的參數中夾帶欄位，造成刪除、還原、改分、改別人的紀錄，或撤銷不是自己、不是今天的紀錄。
+   - 壇務能否提升自己的權限、改別人的 PIN、改擁有者主帳號，或讓停用的帳號恢復。
+   - 訪客能否寫入任何資料：`apiApply`、`apiUserOp`、`apiSetLogo`、`apiImportState`、`apiRebuildReports`、`apiExportBackup`。
+3. **資料外洩**（`AttendAuth.viewFor`、`syncView`；`apiLoginOptions`、`apiGetState` 的 `since` 參數）
+   - 訪客能否拿到未遮蔽的學員名字、備註、操作者，或回收區的資料？例如偽造 `since.view`、`logCount`，或在登入登出之間切換。
+   - 訪客看得到的欄位是否恰當：流水帳的 `reason`（壇務自己輸入的事由、擁有者校正的原因）、服務人員的完整姓名、`apiLoginOptions` 公開的帳號名稱。對公開網址而言，這些合適嗎？
+   - 錯誤訊息、`console.error`、回應內容會不會洩漏內部資訊。
+4. **輸入驗證與注入**
+   - `doPost`：白名單是否完整（有沒有其他全域函式能被呼叫）、`args` 傳物件、陣列、`null`、超大字串時的行為。
+   - XSS：介面用 `App.html` 樣板自動跳脫。請找出所有 `innerHTML` 與屬性輸出，確認沒有未跳脫的資料，包括匯入檔、CSV 匯入的名冊、LOGO（只接受 `data:image/(png|jpeg|webp);base64,`）。
+   - 試算表與 CSV 的公式注入（階段 6-8 已處理，請確認是否完整）。
+   - 匯入：惡意或損壞的備份檔、v2 資料（`migrate-v2.js`），會不會寫入破壞後續讀取的資料，或繞過 store 的欄位驗證。
+5. **資源濫用**（推測也可以，請寫出需要確認什麼）
+   - 不用登入就能呼叫的 API（`apiLoginOptions`、`apiLogin`、`apiGetState`、`apiGetLogo`）被大量呼叫時，Apps Script 的配額、並行上限、試算表讀取，會不會讓佛堂當天無法點名。
+   - 已登入的壇務能否用超大 op（例如上萬筆 `student.import`、很長的文字）讓資料變得過大而無法讀寫。
+6. **供應鏈與發布**
+   - `.github/workflows/pages.yml` 的權限、使用的 actions 是否固定版本。
+   - 公開 repo 中有沒有不該公開的內容（PIN、`.clasp.json`、試算表 ID、真實姓名、組織圖檔）。
+
+## 已知問題（前三次審查找到，請確認或補充）
+
+第一次審查只看了階段 6-5（職務下拉選單），找到 5 項，都已在階段 6-7、6-8 處理。第二次是全 repo 審查（基準 `0f8c508`），找到 16 項，以下依那次的編號列出。第三次是 Claude 的安全性複查，找到 A–C 三項。
+
+**第三次審查（Claude，基準 `e134950`）找到，尚未修正：**
+
+- A（高，確定）登入失敗次數「讀取 → 比對 PIN → 寫回」沒有加鎖（`src/Code.js` 的 `apiLogin`）。並行送出請求時，每個請求讀到的次數都一樣，一輪 15 分鐘內可以猜遠超過 5 次。再加上 PIN 最短 4 位數（`src/auth.js` 的 `PIN_RE`、`docs/deploy-gas.md` 的 `OWNER_PIN`），擁有者 PIN 可能在可接受的時間內被猜中。
+- B（中，確定）擁有者主帳號的 token 無法撤銷：token 只記帳號 id，6 小時內有使用就會一直延長；修改 `OWNER_PIN` 後，舊 token 仍然有效（`userFromToken_`）。壇務帳號可以用停用來撤銷，擁有者主帳號不行。
+- C（中，確定，待使用者決定）訪客看得到流水帳的 `reason` 全文（壇務自訂的加分事由、擁有者的校正原因）與服務人員的完整姓名；`apiLoginOptions` 也公開所有帳號名稱。這些文字裡可能有學員全名或家庭狀況。
 
 **已在階段 6-8 修正（請確認修正是否正確）：**
 
@@ -123,7 +167,7 @@ npm run e2e
 
 ## 希望審查的重點
 
-1. **權限與安全（最優先）**：後台網址公開，任何人都能直接呼叫 `doPost`，請特別注意。
+1. **權限與安全（最優先）**：見上方「安全性審查（必做）」，以下為補充。
    - **權限能否被繞過**：`apiApply` → `AttendAuth.authorize` → `AttendStore.apply`。壇務能否透過自己組的 op（例如在 `points.award`、`class.update`、`student.import`、`session.save` 的參數中夾帶欄位）做到刪除、校正、改別人的紀錄，或撤銷非今天、非本人的紀錄？訪客能否寫入，或讀到未遮蔽的名字、備註、操作者？
    - **`doPost`**：白名單、參數型態（傳物件、陣列、超大字串）、錯誤時是否洩漏內部資訊。
    - **登入**：PIN 雜湊（`hashPin`，SHA-256 500 輪加 salt）、錯誤 5 次鎖定（以 CacheService 計數）、token 存在 CacheService 並自動延長、停用或刪除帳號後 token 失效。對公開的後台而言是否足夠？例如能否針對不同帳號輪流猜 PIN。
