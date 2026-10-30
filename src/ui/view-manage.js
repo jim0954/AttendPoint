@@ -4,7 +4,7 @@
   const html = App.html;
 
   const THEMES = [['amber', '琥珀'], ['emerald', '翠綠'], ['sky', '天藍'], ['rose', '玫瑰'], ['violet', '紫羅蘭'], ['stone', '石墨']];
-  const ROLES = ['點傳師', '主壇務', '副主壇務', '護持壇務'];
+  const ROLES = AttendStore.STAFF_ROLES;
   const SECTIONS = [['classes', '🏫 班別設定'], ['sessions', '🗓️ 課次與執勤'], ['staff', '🙋 服務人員']];
 
   App.s.manageSection = 'classes';

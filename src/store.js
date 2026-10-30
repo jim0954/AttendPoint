@@ -604,10 +604,18 @@
 
   // ----- 服務人員 -----
 
+  const STAFF_ROLES = ['點傳師', '主壇務', '副主壇務', '護持壇務'];
+
   function staffFields(p, base) {
     const out = {};
     if (!base || 'name' in p) out.name = text(p.name, '姓名', { required: true, max: 20 });
-    if (!base || 'role' in p) out.role = text(p.role, '職務', { max: 20 });
+    if (!base || 'role' in p) {
+      out.role = text(p.role, '職務', { max: 20 });
+      // 職務只能從固定選項選；改版前留下的舊職務，編輯時沒改動就照舊保留
+      if (out.role && STAFF_ROLES.indexOf(out.role) === -1 && !(base && base.role === out.role)) {
+        fail('INVALID_INPUT', '職務只能是' + STAFF_ROLES.join('、') + '，或不填');
+      }
+    }
     if (!base || 'note' in p) out.note = text(p.note, '備註', { max: 200 });
     if (!base || 'classIds' in p) out.classIds = Array.isArray(p.classIds) ? p.classIds.slice() : [];
     return out;
@@ -1033,6 +1041,7 @@
 
   return {
     SCHEMA_VERSION: SCHEMA_VERSION,
+    STAFF_ROLES: STAFF_ROLES,
     OP_TYPES: Object.keys(OPS),
     StoreError: StoreError,
     emptyState: emptyState,

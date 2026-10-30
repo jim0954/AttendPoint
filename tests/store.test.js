@@ -220,6 +220,25 @@ test('服務人員：執勤指派與護持堂數統計', () => {
   expectError(() => t.run({ type: 'session.save', classId: t.classId, date: '2026-11-07', dutyStaffIds: ['P999'] }), 'NOT_FOUND');
 });
 
+test('服務人員：職務只能從固定選項選，舊職務沒改動時保留', () => {
+  const t = setup();
+  assert.deepEqual(Store.STAFF_ROLES, ['點傳師', '主壇務', '副主壇務', '護持壇務']);
+  expectError(() => t.run({ type: 'staff.create', name: '甲', role: '講師' }), 'INVALID_INPUT');
+  const blank = t.run({ type: 'staff.create', name: '乙', role: '' });
+  assert.equal(t.state.staff.find((p) => p.id === blank.id).role, '');
+  const p = t.run({ type: 'staff.create', name: '丙', role: '副主壇務' });
+  expectError(() => t.run({ type: 'staff.update', id: p.id, patch: { role: '輔導' } }), 'INVALID_INPUT');
+
+  // 改版前建立的舊職務：只改其他欄位（或送回同一個舊職務）都保留，改成其他非選項的值不行
+  t.state.staff.find((x) => x.id === p.id).role = '小隊輔';
+  t.run({ type: 'staff.update', id: p.id, patch: { name: '丙二', role: '小隊輔' } });
+  t.run({ type: 'staff.update', id: p.id, patch: { note: '備註' } });
+  assert.equal(t.state.staff.find((x) => x.id === p.id).role, '小隊輔');
+  expectError(() => t.run({ type: 'staff.update', id: p.id, patch: { role: '輔導' } }), 'INVALID_INPUT');
+  t.run({ type: 'staff.update', id: p.id, patch: { role: '護持壇務' } });
+  assert.equal(t.state.staff.find((x) => x.id === p.id).role, '護持壇務');
+});
+
 test('跨年度結算：清空紀錄與課次、永久清除回收區、保留名冊', () => {
   const t = setup();
   t.run({ type: 'points.checkin', studentId: t.a, sessionId: t.sessionId });

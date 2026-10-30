@@ -142,9 +142,15 @@ test('單機版', { skip: SKIP }, async (t) => {
   });
 
   await t.test('服務人員：舊職務編輯時以「（舊）」保留，改選後才換掉', async () => {
-    // 模擬改版前建立、職務不在四個選項內的服務人員
-    await page.evaluate(() => App.run({ type: 'staff.create', name: '陳師兄', role: '小隊輔', classIds: [] }));
+    // 模擬改版前建立、職務不在四個選項內的服務人員（現在的規則不允許新建，直接改瀏覽器裡的資料）
+    await page.evaluate(() => App.run({ type: 'staff.create', name: '陳師兄', role: '', classIds: [] }));
     await idle(page);
+    await page.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem('attendpoint_v3'));
+      data.staff.find((p) => p.name === '陳師兄').role = '小隊輔';
+      localStorage.setItem('attendpoint_v3', JSON.stringify(data));
+      return App.refresh(true);
+    });
     const roleOf = () => page.evaluate(() => App.s.data.staff.find((p) => p.name.indexOf('陳師兄') === 0).role);
     const openEditor = async () => {
       await page.locator('#view .list-item', { hasText: '陳師兄' }).locator('[data-action="edit-staff"]').click();
