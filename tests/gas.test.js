@@ -223,6 +223,27 @@ test('報表工作表：學員總表包含計算後的分數', () => {
   fail(g.apiRebuildReports(staff), 'FORBIDDEN');
 });
 
+test('報表工作表：每堂課的出席人數、出席率與名單；服務人員的各班護持堂數', () => {
+  const { g, owner, staff, classId, sheets } = setup();
+  const ids = ['王小明', '李小華', '陳大同', '林小美'].map((name) => ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name })).result.id);
+  const p = ok(g.apiApply(owner, { type: 'staff.create', name: '林輔導', role: '護持壇務', classIds: [classId] })).result;
+  ok(g.apiApply(owner, { type: 'staff.create', name: '陳師姐', role: '', classIds: [classId] }));
+  const date = '2026-10-24';
+  ok(g.apiApplyBatch(staff, [
+    { type: 'points.checkin', studentId: ids[0], date },
+    { type: 'points.checkin', studentId: ids[1], date },
+    { type: 'points.checkin', studentId: ids[2], date },
+    { type: 'session.duty', classId, staffId: p.id, date }
+  ], null));
+  ok(g.apiRebuildReports(owner));
+  const rows = sheets['課次'].cells();
+  assert.deepEqual(rows[0].slice(4, 12), ['學員出席', '學員出席率', '出席學員', '缺席學員', '服務人員出席', '服務人員出席率', '出席服務人員', '缺席服務人員']);
+  assert.deepEqual(rows[1].slice(4, 12), ['3 / 4', '75%', '王小明、李小華、陳大同', '林小美', '1 / 2', '50%', '林輔導', '陳師姐']);
+  const staffRows = sheets['服務人員'].cells();
+  assert.equal(staffRows[0][4], '各班護持堂數');
+  assert.equal(staffRows.find((r) => r[0] === '林輔導')[4], '兒童讀經班 1');
+});
+
 test('報表工作表：開頭像公式的文字以純文字寫入，數字不變', () => {
   const { g, owner, staff, classId, sheets } = setup();
   const stu = ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name: '=HYPERLINK("x")' })).result;

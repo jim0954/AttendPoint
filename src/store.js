@@ -208,6 +208,57 @@
     return counts;
   }
 
+  /** 各服務人員在每個班的護持堂數：{ 人員 id: { 班別 id: 堂數 } } */
+  function computeStaffDutyByClass(state) {
+    const counts = {};
+    active(state.sessions).forEach(function (s) {
+      (s.dutyStaffIds || []).forEach(function (id) {
+        counts[id] = counts[id] || {};
+        counts[id][s.classId] = (counts[id][s.classId] || 0) + 1;
+      });
+    });
+    return counts;
+  }
+
+  /**
+   * 每堂課的出席：{ 課次 id: { students, absentStudents, studentTotal, staff, absentStaff, staffTotal } }（都是 id 陣列）。
+   * 應到學員 = 這個班目前的學員；應到服務人員 = 支援這個班或跨班支援的服務人員（與點名頁相同）。
+   * 已經報到或執勤、後來刪除或換班的人也算在應到人數內，出席率不會超過 100%。
+   */
+  function computeSessionAttendance(state) {
+    const totals = computeTotals(state);
+    const present = {};
+    Object.keys(totals).forEach(function (id) {
+      totals[id].sessionIds.forEach(function (sid) { (present[sid] = present[sid] || []).push(id); });
+    });
+    const liveStaff = {};
+    active(state.staff).forEach(function (p) { liveStaff[p.id] = p; });
+    const out = {};
+    state.sessions.forEach(function (s) {
+      const students = present[s.id] || [];
+      const roster = active(state.students)
+        .filter(function (x) { return x.classId === s.classId; })
+        .map(function (x) { return x.id; });
+      const absentStudents = roster.filter(function (id) { return students.indexOf(id) === -1; });
+      const staff = (s.dutyStaffIds || []).filter(function (id) { return state.staff.some(function (p) { return p.id === id; }); });
+      const staffRoster = Object.keys(liveStaff).filter(function (id) {
+        const ids = liveStaff[id].classIds || [];
+        return !ids.length || ids.indexOf(s.classId) !== -1;
+      });
+      const absentStaff = staffRoster.filter(function (id) { return staff.indexOf(id) === -1; });
+      out[s.id] = {
+        students: students, absentStudents: absentStudents, studentTotal: students.length + absentStudents.length,
+        staff: staff, absentStaff: absentStaff, staffTotal: staff.length + absentStaff.length
+      };
+    });
+    return out;
+  }
+
+  /** 出席率文字：3 / 4 → '75%'；應到 0 人時為 '—' */
+  function rateText(count, total) {
+    return total ? Math.round(count / total * 100) + '%' : '—';
+  }
+
   /** 依班別學號前綴產生下一個學號，例如 K07 */
   function nextStudentId(state, classId) {
     const cls = mustFind(state.classes, classId, '班別');
@@ -1051,6 +1102,9 @@
     computeTotals: computeTotals,
     studentTotals: studentTotals,
     computeStaffDuty: computeStaffDuty,
+    computeStaffDutyByClass: computeStaffDutyByClass,
+    computeSessionAttendance: computeSessionAttendance,
+    rateText: rateText,
     isCheckedIn: isCheckedIn,
     findSession: findSession,
     slotMatches: slotMatches,

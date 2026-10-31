@@ -239,6 +239,37 @@ test('服務人員：職務只能從固定選項選，舊職務沒改動時保�
   assert.equal(t.state.staff.find((x) => x.id === p.id).role, '護持壇務');
 });
 
+test('每堂出席：學員與服務人員的出席、缺席、應到人數與出席率；各班護持堂數', () => {
+  const t = setup();
+  const other = t.run({ type: 'class.create', name: '成人班', idPrefix: 'A' });
+  const c = t.run({ type: 'student.create', classId: t.classId, name: '範例丙' });
+  t.run({ type: 'student.create', classId: other.id, name: '他班學員' });
+  const mine = t.run({ type: 'staff.create', name: '本班壇務', role: '主壇務', classIds: [t.classId] });
+  const helper = t.run({ type: 'staff.create', name: '跨班支援', role: '', classIds: [] });
+  t.run({ type: 'staff.create', name: '他班壇務', role: '', classIds: [other.id] });
+  t.run({ type: 'points.checkin', studentId: t.a, sessionId: t.sessionId });
+  t.run({ type: 'points.checkin', studentId: c.id, sessionId: t.sessionId });
+  const wrong = t.run({ type: 'points.checkin', studentId: t.b, sessionId: t.sessionId });
+  t.run({ type: 'log.reverse', logId: wrong.logId }); // 撤銷的報到不算出席
+  t.run({ type: 'session.duty', classId: t.classId, staffId: mine.id, sessionId: t.sessionId });
+  t.run({ type: 'student.delete', id: c.id }); // 報到後才刪除：仍算出席，也算在應到人數內
+
+  const a = Store.computeSessionAttendance(t.state)[t.sessionId];
+  assert.deepEqual(a.students.sort(), [t.a, c.id].sort());
+  assert.deepEqual(a.absentStudents, [t.b]);
+  assert.equal(a.studentTotal, 3);
+  assert.deepEqual(a.staff, [mine.id]);
+  assert.deepEqual(a.absentStaff, [helper.id]);
+  assert.equal(a.staffTotal, 2);
+  assert.equal(Store.rateText(a.students.length, a.studentTotal), '67%');
+  assert.equal(Store.rateText(0, 0), '—');
+
+  const s2 = t.run({ type: 'session.ensure', classId: other.id, date: '2026-10-24' });
+  t.run({ type: 'session.duty', classId: other.id, staffId: helper.id, sessionId: s2.id });
+  t.run({ type: 'session.duty', classId: t.classId, staffId: helper.id, date: '2026-10-31' });
+  assert.deepEqual(Store.computeStaffDutyByClass(t.state)[helper.id], { [t.classId]: 1, [other.id]: 1 });
+});
+
 test('跨年度結算：清空紀錄與課次、永久清除回收區、保留名冊', () => {
   const t = setup();
   t.run({ type: 'points.checkin', studentId: t.a, sessionId: t.sessionId });

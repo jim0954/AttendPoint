@@ -610,19 +610,36 @@ function rebuildReportSheets() {
       ];
     }));
 
+  // 各班堂數依班別順序列出，例如「兒童讀經班 3、成人班 1」
+  const dutyByClass = AttendStore.computeStaffDutyByClass(state);
   writeTable_('服務人員',
-    ['姓名', '職務', '支援班別', '護持堂數', '備註', '狀態'],
+    ['姓名', '職務', '支援班別', '護持堂數', '各班護持堂數', '備註', '狀態'],
     state.staff.map(function (p) {
-      return [p.name, p.role, (p.classIds || []).map(function (id) { return (classes[id] || {}).name || ''; }).join('、'), duty[p.id] || 0, p.note || '', status(p)];
+      const counts = dutyByClass[p.id] || {};
+      const perClass = state.classes
+        .filter(function (c) { return counts[c.id]; })
+        .map(function (c) { return c.name + ' ' + counts[c.id]; })
+        .join('、');
+      return [p.name, p.role, (p.classIds || []).map(function (id) { return (classes[id] || {}).name || ''; }).join('、'), duty[p.id] || 0, perClass, p.note || '', status(p)];
     }));
 
+  // 每堂課的學員與服務人員出席：人數、出席率與名單
   const staffMap = byId(state.staff);
+  const attendance = AttendStore.computeSessionAttendance(state);
+  const names = function (ids, map) { return ids.map(function (id) { return (map[id] || {}).name || ''; }).join('、'); };
+  const rate = AttendStore.rateText;
   writeTable_('課次',
-    ['上課日期', '班別', '時間', '課程主題', '執勤人員', '狀態'],
-    state.sessions.map(function (s) {
+    ['上課日期', '班別', '時間', '課程主題',
+      '學員出席', '學員出席率', '出席學員', '缺席學員',
+      '服務人員出席', '服務人員出席率', '出席服務人員', '缺席服務人員', '狀態'],
+    state.sessions.slice().sort(function (a, b) { return b.date.localeCompare(a.date); }).map(function (s) {
+      const a = attendance[s.id];
       return [
         s.date, (classes[s.classId] || {}).name || '', s.start && s.end ? s.start + '–' + s.end : '', s.topic,
-        (s.dutyStaffIds || []).map(function (id) { return (staffMap[id] || {}).name || ''; }).join('、'), status(s)
+        a.students.length + ' / ' + a.studentTotal, rate(a.students.length, a.studentTotal),
+        names(a.students, students), names(a.absentStudents, students),
+        a.staff.length + ' / ' + a.staffTotal, rate(a.staff.length, a.staffTotal),
+        names(a.staff, staffMap), names(a.absentStaff, staffMap), status(s)
       ];
     }));
 

@@ -191,6 +191,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .toast.warn { background: #991b1b; color: #fff; }
 .toast.gift { background: #5b21b6; color: #fff; }
 .toast.ok { background: #065f46; color: #fff; }
+.attendance summary { cursor: pointer; }
+.attendance[open] summary { margin-bottom: 4px; }
 .toast-count { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.22); font-weight: 700; }
 .toast-count:empty { display: none; }
 

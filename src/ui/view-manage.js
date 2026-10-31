@@ -255,11 +255,9 @@
     const sessions = AttendStore.active(App.s.data.sessions)
       .filter(function (s) { return s.classId === cls.id; })
       .sort(function (a, b) { return b.date.localeCompare(a.date) || (b.start || '').localeCompare(a.start || ''); });
-    const totals = App.totals();
-    const attendance = {};
-    Object.keys(totals).forEach(function (id) {
-      totals[id].sessionIds.forEach(function (sid) { attendance[sid] = (attendance[sid] || 0) + 1; });
-    });
+    const attendance = AttendStore.computeSessionAttendance(App.s.data);
+    const studentName = function (id) { const s = App.studentById(id); return s ? s.name : ''; };
+    const rate = AttendStore.rateText;
     return html`
       <div class="toolbar">
         <button type="button" class="btn btn-primary" data-action="new-session">＋ 新增課次</button>
@@ -273,7 +271,7 @@
               <div class="grow">
                 <b>${App.dateLabel(s.date)}</b> <span class="faint">${s.date.slice(0, 4)}</span> ${App.timeRange(s)}
                 ${s.topic ? html`<div>📖 ${s.topic}</div>` : ''}
-                <div class="faint">出席 ${attendance[s.id] || 0} 人${s.dutyStaffIds.length ? html`・執勤：${s.dutyStaffIds.map(staffName).join('、')}` : ''}</div>
+                ${sessionAttendance(attendance[s.id], studentName, rate)}
               </div>
               <button type="button" class="btn btn-sm" data-action="edit-session" data-id="${s.id}">✏️</button>
               ${App.can({ type: 'session.delete', id: s.id }) ? html`<button type="button" class="btn btn-sm" data-action="delete-session" data-id="${s.id}">🗑️</button>` : ''}
@@ -281,6 +279,23 @@
         })}
         ${sessions.length ? '' : html`<div class="empty">還沒有課次。點名時會自動建立當天的課次，也可以先排好課表。</div>`}
       </div>`;
+  }
+
+  /** 課次的出席人數與出席率，點開可看名單 */
+  function sessionAttendance(a, studentName, rate) {
+    const names = function (ids, fn) { return ids.length ? ids.map(fn).join('、') : '（無）'; };
+    return html`
+      <details class="attendance" data-attendance>
+        <summary class="faint">
+          學員 <b class="num">${a.students.length} / ${a.studentTotal}</b>（${rate(a.students.length, a.studentTotal)}）・服務人員 <b class="num">${a.staff.length} / ${a.staffTotal}</b>（${rate(a.staff.length, a.staffTotal)}）
+        </summary>
+        <div class="stack faint">
+          <div>✅ 出席學員：${names(a.students, studentName)}</div>
+          <div>➖ 缺席學員：${names(a.absentStudents, studentName)}</div>
+          <div>🙋 出席服務人員：${names(a.staff, staffName)}</div>
+          <div>➖ 缺席服務人員：${names(a.absentStaff, staffName)}</div>
+        </div>
+      </details>`;
   }
 
   /** 新課次的預設日期：從目前日期起，下一個還沒有課次的常態上課日（沒有常態時間就每 7 天找） */
@@ -398,13 +413,7 @@
 
   /** 各服務人員在每個班的護持堂數：{ 人員 id: '仁德大天使班 3、兒童讀經班 2' }（依班別順序） */
   function dutyByClass() {
-    const counts = {};
-    AttendStore.active(App.s.data.sessions).forEach(function (s) {
-      s.dutyStaffIds.forEach(function (id) {
-        counts[id] = counts[id] || {};
-        counts[id][s.classId] = (counts[id][s.classId] || 0) + 1;
-      });
-    });
+    const counts = AttendStore.computeStaffDutyByClass(App.s.data);
     const out = {};
     Object.keys(counts).forEach(function (id) {
       out[id] = App.s.data.classes

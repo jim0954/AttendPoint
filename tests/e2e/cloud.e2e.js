@@ -249,7 +249,7 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await idle(page);
   });
 
-  await t.test('服務人員：護持堂數依班別分開統計', async () => {
+  await t.test('服務人員：護持堂數依班別分開統計；課次顯示每堂出席率與名單', async () => {
     // 另一台：林輔導也到另一個班支援一堂
     await page.evaluate((pin) => {
       const tok = apiLogin('U-owner', pin).token;
@@ -264,6 +264,16 @@ test('雲端版', { skip: SKIP }, async (t) => {
     await page.click('#view [data-action="manage-section"][data-id="staff"]');
     const item = page.locator('#view .list-item', { hasText: '林輔導' });
     assert.match(await item.innerText(), /年度護持 2 堂（兒童讀經班 1、成人班 1）/);
+
+    // 課次：每堂的學員與服務人員出席人數、出席率，點開看名單
+    await page.click('#view [data-action="manage-section"][data-id="sessions"]');
+    const today = page.locator('#view [data-attendance]').first();
+    assert.match(await today.locator('summary').innerText(), /學員 3 \/ 3（100%）・服務人員 1 \/ 1（100%）/);
+    await today.locator('summary').click();
+    const detail = await today.innerText();
+    assert.match(detail, /出席學員：.*王小明/);
+    assert.match(detail, /出席服務人員：林輔導/);
+    assert.match(detail, /缺席學員：（無）/);
     await tab(page, 'checkin');
   });
 
