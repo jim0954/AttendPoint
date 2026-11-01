@@ -180,6 +180,52 @@
   };
 
   /** 讀取表單欄位：<input name="x"> → { x: value }；checkbox 為 boolean */
+  // ---------- 送出中的表單 ----------
+  // 雲端版每次要等後台一兩秒，容易以為沒反應又按一次（例如登入被算成錯好幾次、新增出兩筆一樣的資料）。
+  // 表單送出時記下是哪個表單；送出時呼叫的 App.run／App.busyUntil 會把它的送出按鈕停用到後台回應，
+  // 期間再按（或按 Enter）都不會再送出。
+  let submitting = null;
+  document.addEventListener('submit', function (e) {
+    if (e.target.dataset.busy) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    submitting = e.target;
+    setTimeout(function () { submitting = null; }, 0);
+  }, true);
+
+  /** 正在送出的表單在 settled（Promise）結束前停用送出按鈕；不是在表單送出時呼叫就不做事 */
+  App.busyUntil = function (settled, busyLabel) {
+    const form = submitting;
+    if (!form || form.dataset.busy) return settled;
+    const btn = form.querySelector('button[type=submit]');
+    const label = btn && btn.textContent;
+    form.dataset.busy = '1';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = busyLabel || '⏳ 處理中…';
+    }
+    function done() {
+      delete form.dataset.busy;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    }
+    Promise.resolve(settled).then(done, done);
+    return settled;
+  };
+
+  /** 表單送出：handler(資料) 回傳的 Promise 結束前按鈕顯示 busyLabel（handler 要自己處理錯誤） */
+  App.onSubmit = function (form, busyLabel, handler) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const p = handler(App.formData(form));
+      if (p && typeof p.then === 'function') App.busyUntil(p, busyLabel);
+    });
+  };
+
   App.formData = function (root) {
     const out = {};
     App.$$('[name]', root).forEach(function (el) {

@@ -107,7 +107,7 @@
   }
 
   function userOp(op, message) {
-    return App.s.backend.userOp(op).then(function (res) {
+    const p = App.s.backend.userOp(op).then(function (res) {
       if (res.users) usersCache = res.users;
       App.render();
       App.toast(message, 'ok');
@@ -116,6 +116,7 @@
       App.handleError(err);
       throw err;
     });
+    return App.busyUntil(p); // 從表單送出時，按鈕停用到後台回應
   }
 
   function userForm(u) {

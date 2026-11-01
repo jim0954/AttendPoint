@@ -37,6 +37,7 @@
 - 6-4：LOGO 由擁有者在「系統與備份」上傳，存在後台（`apiGetLogo`／`apiSetLogo`），不放進 repo。
 - 6-5：服務人員職務固定為點傳師、主壇務、副主壇務、護持壇務（`AttendStore.STAFF_ROLES`，後台也檢查）。6-6～6-10：外部審查（`REQUEST.md`，結果 `FINDINGS.md` 不進 repo）與修正，處理結果記在 `REQUEST.md` 的「已知問題」。6-10 加強登入安全（PIN 至少 6 位、失敗次數加鎖、改 PIN 後舊登入失效）並隱藏訪客看到的自行輸入事由。
 - 6-16：下課後自動更新報表（`autoRebuildReports`，觸發條件每 10 分鐘檢查，課次結束時間或最後活動時間＋30 分鐘後重建）。
+- 6-22：表單送出時（`App.run`、`App.busyUntil`、`App.onSubmit`）送出按鈕停用到後台回應，連按只送出一次；登入對話框先用上次讀到的帳號清單、背景更新。
 - 6-21：處理第六、七次審查（`apply` 只複製流水帳陣列、共用既有紀錄，每次操作快約 16 倍；刪除／還原學員記入入班紀錄；匯入名冊可指定入班日期；報表與 CSV 加入班日期、開始服務日期；`DATA_SHEET` 與 `DATA_VERSION` 一次寫入）。
 - 6-19：每堂應到人數依當天名冊（學員 `enrollments` 入班紀錄、服務人員 `joinDate` 開始服務日期；改版前的資料視為一直都在）。
 - 6-18：修正第五次審查 D、E、F、I（`deploy-gas.js` 用 API 比對版本；自動報表以 `DATA_VERSION`／`REPORT_PLAN` 省略不必要的讀取；登入計數改用文件鎖；actions 固定到 SHA）。

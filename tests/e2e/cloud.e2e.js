@@ -45,6 +45,40 @@ test('雲端版', { skip: SKIP }, async (t) => {
     assert.deepEqual(tabs, ['checkin', 'board', 'gifts']);
   });
 
+  await t.test('登入：等待後台時按鈕停用，連按也只算一次', async () => {
+    // 連按兩下右上角「登入」：帳號清單讀取中只開一個對話框
+    await page.evaluate(() => { const b = document.querySelector('#userBtn'); b.click(); b.click(); });
+    const m = await dialog(page);
+    await m.locator('#loginPin').waitFor();
+    assert.equal(await page.locator('#modalRoot .modal').count(), 1);
+    // PIN 打錯又連按兩下「登入」：只送出一次，只算錯一次
+    await m.locator('#loginPin').fill('000000');
+    const submit = m.locator('button[type=submit]');
+    await page.evaluate(() => { const b = document.querySelector('#modalRoot button[type=submit]'); b.click(); b.click(); });
+    assert.equal(await submit.isDisabled(), true);
+    assert.equal(await submit.innerText(), '⏳ 登入中…');
+    await toast(page, '還可以再試 4 次');
+    assert.equal(await page.evaluate(() => CacheService.getScriptCache().get('fail:U-owner')), '1');
+    assert.equal(await submit.isDisabled(), false);
+    assert.equal(await m.locator('#loginPin').inputValue(), '', 'PIN 打錯會清空');
+    await m.locator('[data-close]').first().click();
+    // 第二次開啟：先用上次讀到的帳號清單立即開啟，讀到最新清單後更新選單（例如別台剛新增的帳號）
+    await page.evaluate((pin) => {
+      const tok = apiLogin('U-owner', pin).token;
+      apiUserOp(tok, { type: 'user.create', name: '別台新增', pin: '246802' });
+    }, OWNER_PIN);
+    const opened = await page.evaluate(() => { document.querySelector('#userBtn').click(); return !!document.querySelector('#modalRoot #loginPin'); });
+    assert.equal(opened, true);
+    await page.locator('#loginUser option', { hasText: '別台新增' }).waitFor({ state: 'attached' });
+    await page.locator('#modalRoot [data-close]').first().click();
+    await page.evaluate((pin) => {
+      const tok = apiLogin('U-owner', pin).token;
+      const u = apiListUsers(tok).users.find((x) => x.name === '別台新增');
+      apiUserOp(tok, { type: 'user.delete', id: u.id });
+    }, OWNER_PIN);
+    await page.evaluate(() => CacheService.getScriptCache().remove('fail:U-owner'));
+  });
+
   await t.test('擁有者：建立壇務帳號', async () => {
     await login(page, OWNER_PIN);
     await page.locator('#userBtn', { hasText: '模擬堂主' }).waitFor();
@@ -231,6 +265,21 @@ test('雲端版', { skip: SKIP }, async (t) => {
     assert.deepEqual(logs, ['合併一', '合併二', '合併三']);
     assert.equal(await page.evaluate(() => readState_().logs.length), before + 3);
     assert.equal(await page.evaluate(() => JSON.stringify(App.s.data) === JSON.stringify(readState_())), true);
+  });
+
+  await t.test('表單連按兩下儲存：按鈕停用到後台回應，只新增一筆', async () => {
+    await tab(page, 'gifts');
+    await page.click('#view .section-title [data-action="edit-gift"]');
+    const m = await dialog(page);
+    await m.locator('[name=name]').fill('連按測試禮品');
+    await m.locator('[name=cost]').fill('5');
+    await page.evaluate(() => { const b = document.querySelector('#modalRoot button[type=submit]'); b.click(); b.click(); });
+    assert.equal(await m.locator('button[type=submit]').isDisabled(), true);
+    assert.equal(await m.locator('button[type=submit]').innerText(), '⏳ 處理中…');
+    await toast(page, '已儲存禮品');
+    await idle(page);
+    assert.equal(await page.evaluate(() => readState_().gifts.filter((g) => g.name === '連按測試禮品').length), 1);
+    await tab(page, 'checkin');
   });
 
   await t.test('還沒同步完成時關閉網頁會先提醒', async () => {

@@ -154,9 +154,17 @@
         return stalled;
       }
     }
+    let settle;
+    const settled = new Promise(function (r) { settle = r; });
     const p = new Promise(function (resolve, reject) {
-      queue.push({ op: op, optimistic: optimistic, resolve: resolve, reject: reject });
+      queue.push({
+        op: op,
+        optimistic: optimistic,
+        resolve: function (v) { resolve(v); settle(); },
+        reject: function (e) { reject(e); settle(); }
+      });
     }).then(null, never);
+    App.busyUntil(settled); // 從表單送出時，按鈕停用到後台回應
     p.accepted = true;
     App.s.pending = queue.length;
     App.render();
@@ -429,39 +437,75 @@
 
   // ---------- 登入 ----------
 
+  // 帳號清單要向後台讀取（雲端版要一兩秒）：讀取中不重複開啟；讀過一次後先用上次的清單立即開啟，背景再更新
+  let loginLoading = false;
+  let loginCache = null;
+
+  function userOptions(users, selected) {
+    return users.map(function (u) {
+      return App.html`<option value="${u.id}" ${u.id === selected ? 'selected' : ''}>${u.name}（${u.roleLabel}）</option>`;
+    });
+  }
+
   function openLogin() {
+    if (loginCache) {
+      showLogin(loginCache);
+      // 背景讀最新的帳號清單（例如剛新增的帳號），對話框還開著就更新選單
+      App.s.backend.loginOptions().then(function (opts) {
+        loginCache = opts;
+        const select = document.querySelector('#loginUser');
+        if (select && opts.users) App.setHtml(select, userOptions(opts.users, select.value));
+      }, function () {});
+      return;
+    }
+    if (loginLoading) return;
+    loginLoading = true;
+    App.toast('⏳ 讀取帳號清單…');
     App.s.backend.loginOptions().then(function (opts) {
-      if (opts.needsOwnerSetup) return openOwnerSetup();
-      App.modal({
-        title: '壇務登入',
-        body: App.html`
-          <form class="stack" data-login>
-            <div class="field">
-              <label for="loginUser">帳號</label>
-              <select id="loginUser" class="select" name="userId">
-                ${opts.users.map(function (u) { return App.html`<option value="${u.id}">${u.name}（${u.roleLabel}）</option>`; })}
-              </select>
-            </div>
-            <div class="field">
-              <label for="loginPin">PIN 碼</label>
-              <input id="loginPin" class="input" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" autofocus />
-            </div>
-            <button type="submit" class="btn btn-primary btn-block">登入</button>
-          </form>`,
-        onMount: function (el, close) {
-          el.querySelector('form').addEventListener('submit', function (e) {
-            e.preventDefault();
-            const f = App.formData(el);
-            App.s.backend.login(f.userId, f.pin).then(function (user) {
-              close();
-              App.setUser(user);
-              App.toast(`🙏 ${user.name}，歡迎登入（${user.roleLabel}）`, 'ok');
-              App.refresh(true);
-            }, App.handleError);
+      loginLoading = false;
+      if (!opts.needsOwnerSetup) loginCache = opts;
+      showLogin(opts);
+    }, function (err) {
+      loginLoading = false;
+      App.handleError(err);
+    });
+  }
+
+  function showLogin(opts) {
+    if (opts.needsOwnerSetup) return openOwnerSetup();
+    App.modal({
+      title: '壇務登入',
+      body: App.html`
+        <form class="stack" data-login>
+          <div class="field">
+            <label for="loginUser">帳號</label>
+            <select id="loginUser" class="select" name="userId">
+              ${userOptions(opts.users)}
+            </select>
+          </div>
+          <div class="field">
+            <label for="loginPin">PIN 碼</label>
+            <input id="loginPin" class="input" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" autofocus />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">登入</button>
+        </form>`,
+      onMount: function (el, close) {
+        const pin = el.querySelector('[name=pin]');
+        App.onSubmit(el.querySelector('form'), '⏳ 登入中…', function (f) {
+          return App.s.backend.login(f.userId, f.pin).then(function (user) {
+            close();
+            App.setUser(user);
+            App.toast(`🙏 ${user.name}，歡迎登入（${user.roleLabel}）`, 'ok');
+            App.refresh(true);
+          }, function (err) {
+            // PIN 錯了：清空讓使用者重新輸入
+            pin.value = '';
+            pin.focus();
+            App.handleError(err);
           });
-        }
-      });
-    }, App.handleError);
+        });
+      }
+    });
   }
 
   function openOwnerSetup() {
@@ -476,11 +520,9 @@
           <button type="submit" class="btn btn-primary btn-block">完成設定並登入</button>
         </form>`,
       onMount: function (el, close) {
-        el.querySelector('form').addEventListener('submit', function (e) {
-          e.preventDefault();
-          const f = App.formData(el);
+        App.onSubmit(el.querySelector('form'), '⏳ 設定中…', function (f) {
           if (f.pin !== f.pin2) return App.toast('⚠️ 兩次輸入的 PIN 不一樣', 'warn');
-          App.s.backend.setupOwner(f.name, f.pin).then(function (user) {
+          return App.s.backend.setupOwner(f.name, f.pin).then(function (user) {
             close();
             App.setUser(user);
             App.toast('👑 設定完成，已登入為擁有者', 'ok');
@@ -529,11 +571,9 @@
           <button type="submit" class="btn btn-primary btn-block">儲存</button>
         </form>`,
       onMount: function (el, close) {
-        el.querySelector('form').addEventListener('submit', function (e) {
-          e.preventDefault();
-          const f = App.formData(el);
+        App.onSubmit(el.querySelector('form'), '⏳ 儲存中…', function (f) {
           if (f.newPin !== f.newPin2) return App.toast('⚠️ 兩次輸入的新 PIN 不一樣', 'warn');
-          App.s.backend.userOp({ type: 'self.changePin', oldPin: f.oldPin, newPin: f.newPin }).then(function () {
+          return App.s.backend.userOp({ type: 'self.changePin', oldPin: f.oldPin, newPin: f.newPin }).then(function () {
             close();
             App.toast('🔑 PIN 已更新', 'ok');
           }, App.handleError);
