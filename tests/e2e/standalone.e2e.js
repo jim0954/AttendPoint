@@ -214,6 +214,21 @@ test('單機版', { skip: SKIP }, async (t) => {
     await tab(page, 'checkin');
   });
 
+  await t.test('批次匯入：可指定新學員的入班日期', async () => {
+    await tab(page, 'roster');
+    await page.click('#view .toolbar [data-action="import-students"]');
+    const m = await modal(page);
+    assert.equal(await m.locator('[data-join-date]').inputValue(), await page.evaluate(() => App.today()));
+    assert.match(await m.innerText(), /這班第一堂課是 \d{4}-\d{2}-\d{2}/);
+    await m.locator('[data-text]').fill('匯入學員甲');
+    await m.locator('[data-join-date]').fill('2026-09-01');
+    await m.locator('[data-import]').click();
+    await toast(page, '匯入完成：新增 1 位');
+    await idle(page);
+    assert.equal(await page.evaluate(() => AttendStore.joinDateOf(App.s.data.students.find((s) => s.name === '匯入學員甲'))), '2026-09-01');
+    await tab(page, 'checkin');
+  });
+
   await t.test('提示：相同的合併成一則並顯示次數，最多同時 3 則', async () => {
     const texts = () => page.locator('#toastRoot .toast').allInnerTexts();
     await page.evaluate(() => {

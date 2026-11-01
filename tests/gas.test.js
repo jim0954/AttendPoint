@@ -219,8 +219,29 @@ test('報表工作表：學員總表包含計算後的分數', () => {
   ok(g.apiApply(staff, { type: 'points.award', studentId: stu.id, points: 15, reason: '背經' }));
   assert.deepEqual(ok(g.apiRebuildReports(owner)).sheets, ['學員總表', '流水帳', '服務人員', '課次']);
   const rows = sheets['學員總表'].cells();
-  assert.deepEqual(rows[1].slice(0, 7), [stu.id, '兒童讀經班', '孝順隊', '王小明', 15, 15, 0]);
+  assert.deepEqual(rows[0].slice(0, 5), ['學號', '班別', '小隊', '姓名', '入班日期']);
+  assert.deepEqual(rows[1].slice(0, 8), [stu.id, '兒童讀經班', '孝順隊', '王小明', rows[1][4], 15, 15, 0]);
+  assert.match(rows[1][4], /^\d{4}-\d{2}-\d{2}$/, '新學員有入班日期');
   fail(g.apiRebuildReports(staff), 'FORBIDDEN');
+});
+
+test('寫入資料時，切換資料工作表與資料版本在同一次呼叫寫入指令碼屬性', () => {
+  const env = setup();
+  const { g, staff, props } = env;
+  const calls = [];
+  const orig = g.PropertiesService.getScriptProperties;
+  g.PropertiesService.getScriptProperties = () => {
+    const p = orig();
+    return Object.assign({}, p, {
+      setProperty: (k, v) => { calls.push([k]); p.setProperty(k, v); },
+      setProperties: (o) => { calls.push(Object.keys(o).sort()); p.setProperties(o); }
+    });
+  };
+  ok(g.apiApply(staff, { type: 'gift.create', name: '文具', cost: 1 }));
+  g.PropertiesService.getScriptProperties = orig;
+  assert.deepEqual(calls, [['DATA_SHEET', 'DATA_VERSION']]);
+  const st = ok(g.apiGetState(staff)).state;
+  assert.equal(props.DATA_VERSION, st.meta.syncId + ':' + st.meta.rev);
 });
 
 test('報表工作表：每堂課的出席人數、出席率與名單；服務人員的各班護持堂數', () => {
@@ -241,8 +262,9 @@ test('報表工作表：每堂課的出席人數、出席率與名單；服務�
   assert.deepEqual(rows[0].slice(4, 12), ['學員出席', '學員出席率', '出席學員', '缺席學員', '服務人員出席', '服務人員出席率', '出席服務人員', '缺席服務人員']);
   assert.deepEqual(rows[1].slice(4, 12), ['3 / 4', '75%', '王小明、李小華、陳大同', '林小美', '1 / 2', '50%', '林輔導', '陳師姐']);
   const staffRows = sheets['服務人員'].cells();
-  assert.equal(staffRows[0][4], '各班護持堂數');
-  assert.equal(staffRows.find((r) => r[0] === '林輔導')[4], '兒童讀經班 1');
+  assert.deepEqual(staffRows[0].slice(3, 6), ['開始服務日期', '護持堂數', '各班護持堂數']);
+  const lin = staffRows.find((r) => r[0] === '林輔導');
+  assert.deepEqual([lin[3], lin[5]], ['2026-10-01', '兒童讀經班 1']);
 });
 
 test('下課後自動更新報表：結束時間（或最後活動時間）＋30 分鐘後的第一次檢查才重建；資料沒變且未到期時不讀試算表', () => {
@@ -301,7 +323,7 @@ test('報表工作表：開頭像公式的文字以純文字寫入，數字不�
   ok(g.apiRebuildReports(owner));
   const row = sheets['學員總表'].cells()[1];
   assert.equal(row[3], `'=HYPERLINK("x")`);
-  assert.equal(row[4], 3);
+  assert.equal(row[5], 3);
   assert.ok(sheets['流水帳'].cells().some((r) => r.indexOf("'-遲到") !== -1));
 });
 

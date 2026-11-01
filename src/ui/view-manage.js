@@ -503,13 +503,13 @@
     'export-staff': function () {
       const duty = AttendStore.computeStaffDuty(App.s.data);
       const byClass = dutyByClass();
-      const rows = [['姓名', '職務', '所屬班別', '年度護持堂數', '各班護持堂數', '執勤日期', '備註']];
+      const rows = [['姓名', '職務', '所屬班別', '開始服務日期', '年度護持堂數', '各班護持堂數', '執勤日期', '備註']];
       App.staffList().forEach(function (p) {
         const dates = AttendStore.active(App.s.data.sessions)
           .filter(function (s) { return s.dutyStaffIds.indexOf(p.id) !== -1; })
           .map(function (s) { const c = App.classById(s.classId); return s.date + (c ? '(' + c.name + ')' : ''); })
           .sort();
-        rows.push([p.name, p.role, p.classIds.map(function (id) { const c = App.classById(id); return c ? c.name : ''; }).join('、') || '跨班支援', duty[p.id] || 0, byClass[p.id] || '', dates.join(' '), p.note]);
+        rows.push([p.name, p.role, p.classIds.map(function (id) { const c = App.classById(id); return c ? c.name : ''; }).join('、') || '跨班支援', p.joinDate || '', duty[p.id] || 0, byClass[p.id] || '', dates.join(' '), p.note]);
       });
       App.download(`服務人員護持表_${App.today()}.csv`, App.toCsv(rows));
     }

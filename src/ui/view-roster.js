@@ -141,6 +141,11 @@
 
     'import-students': function () {
       const cls = App.cls();
+      // 這班最早的課次：學期中途才匯入名冊時，入班日期通常要改成這天
+      const first = AttendStore.active(App.s.data.sessions)
+        .filter(function (s) { return s.classId === cls.id; })
+        .map(function (s) { return s.date; })
+        .sort()[0];
       App.modal({
         title: '批次匯入學員',
         body: html`
@@ -158,6 +163,11 @@
           <div class="field">
             <label>或直接貼上</label>
             <textarea class="textarea" data-text placeholder="孝順隊, 王小明&#10;仁愛隊, 陳小華"></textarea>
+          </div>
+          <div class="field">
+            <label>新學員的入班日期</label>
+            <input class="input" type="date" data-join-date value="${App.today()}" />
+            <span class="hint">計算每堂課應到人數用。${first ? `這班第一堂課是 ${first}，名冊比開課晚建立的話請改成這天。` : ''}已在名冊上的學員不受影響。</span>
           </div>
           <div data-preview class="faint"></div>
           <div class="btn-row">
@@ -188,7 +198,8 @@
           m.querySelector('[data-import]').addEventListener('click', function () {
             const r = rows();
             if (!r.length) return App.toast('⚠️ 沒有可匯入的資料', 'warn');
-            App.run({ type: 'student.import', defaultClassId: cls.id, rows: r }).then(function (res) {
+            const joinDate = m.querySelector('[data-join-date]').value;
+            App.run({ type: 'student.import', defaultClassId: cls.id, rows: r, joinDate: joinDate || undefined }).then(function (res) {
               close();
               const x = res.result;
               App.toast(`📥 匯入完成：新增 ${x.added} 位、更新 ${x.updated} 位${x.skipped.length ? `、略過 ${x.skipped.length} 筆` : ''}`, 'ok');
@@ -214,11 +225,11 @@
 
     'export-roster': function () {
       const totals = App.totals();
-      const rows = [['年度', '學號', '班別', '小隊', '姓名', '榮譽稱號', '出席堂數', '榮譽總分', '可用點數', '備註']];
+      const rows = [['年度', '學號', '班別', '小隊', '姓名', '入班日期', '榮譽稱號', '出席堂數', '榮譽總分', '可用點數', '備註']];
       App.classes().forEach(function (c) {
         App.students(c.id).forEach(function (s) {
           const t = totals[s.id];
-          rows.push([App.s.data.meta.yearLabel, s.id, c.name, App.teamName(s), s.name, App.rank(t.honor).title, t.sessionIds.length, t.honor, t.balance, s.note]);
+          rows.push([App.s.data.meta.yearLabel, s.id, c.name, App.teamName(s), s.name, AttendStore.joinDateOf(s), App.rank(t.honor).title, t.sessionIds.length, t.honor, t.balance, s.note]);
         });
       });
       App.download(`學員總表_${App.today()}.csv`, App.toCsv(rows));

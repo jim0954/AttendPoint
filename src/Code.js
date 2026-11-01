@@ -183,7 +183,8 @@ function writeJson_(sheetName, json, hidden) {
 }
 
 /** 寫到目前沒在使用的工作表，確認寫入完整後才切換，切換前讀取的人仍看到舊資料 */
-function writeData_(json) {
+/** 寫入資料；extraProps 會與 DATA_SHEET 在同一次呼叫寫入指令碼屬性（一起成功或一起失敗） */
+function writeData_(json, extraProps) {
   const current = props_().getProperty(DATA_PTR) || DATA_SHEETS[0];
   const target = current === DATA_SHEETS[0] ? DATA_SHEETS[1] : DATA_SHEETS[0];
   const count = writeJson_(target, json, true);
@@ -194,7 +195,10 @@ function writeData_(json) {
   if (sheet.getLastRow() !== count || String(last) !== CHUNK_MARK + tail) {
     throw appError_('WRITE_FAILED', '資料寫入不完整，這次操作沒有生效，請再試一次');
   }
-  props_().setProperty(DATA_PTR, target);
+  const props = {};
+  props[DATA_PTR] = target;
+  Object.keys(extraProps || {}).forEach(function (k) { props[k] = extraProps[k]; });
+  props_().setProperties(props);
 }
 
 function backup_(state, label) {
@@ -244,9 +248,11 @@ const DATA_VERSION = 'DATA_VERSION';
 
 function writeState_(state) {
   cache_().remove(SYNC_KEY);
-  writeData_(JSON.stringify(state));
   const key = syncKey_(AttendAuth.syncInfo(state));
-  props_().setProperty(DATA_VERSION, key);
+  // 切換資料工作表與記錄資料版本合成一次寫入，不會只成功一半
+  const extra = {};
+  extra[DATA_VERSION] = key;
+  writeData_(JSON.stringify(state), extra);
   cache_().put(SYNC_KEY, key, TOKEN_TTL);
 }
 
@@ -669,10 +675,10 @@ function rebuildReportSheets() {
   const typeLabel = { checkin: '報到', points: '加減分', redeem: '兌換', adjust: '校正', reversal: '撤銷' };
 
   writeTable_('學員總表',
-    ['學號', '班別', '小隊', '姓名', '榮譽總分', '可用點數', '出席堂數', '備註', '狀態'],
+    ['學號', '班別', '小隊', '姓名', '入班日期', '榮譽總分', '可用點數', '出席堂數', '備註', '狀態'],
     state.students.map(function (s) {
       const t = totals[s.id];
-      return [s.id, (classes[s.classId] || {}).name || '', teamName(s), s.name, t.honor, t.balance, t.sessionIds.length, s.note || '', status(s)];
+      return [s.id, (classes[s.classId] || {}).name || '', teamName(s), s.name, AttendStore.joinDateOf(s), t.honor, t.balance, t.sessionIds.length, s.note || '', status(s)];
     }));
 
   writeTable_('流水帳',
@@ -688,14 +694,14 @@ function rebuildReportSheets() {
   // 各班堂數依班別順序列出，例如「兒童讀經班 3、成人班 1」
   const dutyByClass = AttendStore.computeStaffDutyByClass(state);
   writeTable_('服務人員',
-    ['姓名', '職務', '支援班別', '護持堂數', '各班護持堂數', '備註', '狀態'],
+    ['姓名', '職務', '支援班別', '開始服務日期', '護持堂數', '各班護持堂數', '備註', '狀態'],
     state.staff.map(function (p) {
       const counts = dutyByClass[p.id] || {};
       const perClass = state.classes
         .filter(function (c) { return counts[c.id]; })
         .map(function (c) { return c.name + ' ' + counts[c.id]; })
         .join('、');
-      return [p.name, p.role, (p.classIds || []).map(function (id) { return (classes[id] || {}).name || ''; }).join('、'), duty[p.id] || 0, perClass, p.note || '', status(p)];
+      return [p.name, p.role, (p.classIds || []).map(function (id) { return (classes[id] || {}).name || ''; }).join('、'), p.joinDate || '', duty[p.id] || 0, perClass, p.note || '', status(p)];
     }));
 
   // 每堂課的學員與服務人員出席：人數、出席率與名單
