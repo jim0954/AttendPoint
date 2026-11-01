@@ -49,12 +49,18 @@ state
 
 ### staff 服務人員
 
-`{ id, name, role, classIds[], note }`。護持堂數由 `computeStaffDuty()` 從課次的 `dutyStaffIds` 計算。
+`{ id, name, role, classIds[], note, joinDate }`。護持堂數由 `computeStaffDuty()` 從課次的 `dutyStaffIds` 計算。`joinDate` 為開始服務日期（建立時預設當天），計算每堂課應到的服務人員；改版前建立的沒有這個欄位，視為一直都在。
 （登入帳號與權限會在階段 2 加入，PIN 碼不會存在這份資料裡。）
 
 ### students 學員
 
-`{ id, classId, teamId, name, note }`。`teamId` 為 `null` 表示不分小隊。學號 `id` 建立後不可修改（流水帳以學號對應）。
+`{ id, classId, teamId, name, note, enrollments[] }`。`teamId` 為 `null` 表示不分小隊。學號 `id` 建立後不可修改（流水帳以學號對應）。
+
+`enrollments[]` 是入班紀錄 `{ classId, from, to }`（日期；`to` 為離開那天、不含，`null` 表示仍在班上）。新增學員時從入班日期（預設當天）開始；換班（`student.update` 改 `classId`，或刪除班別時轉班）從當天起結束舊的、加入新的；`student.update` 的 `patch.joinDate` 修改目前這個班的入班日期。改版前建立的學員沒有這個欄位，視為一直在目前的班別。
+
+### 每堂出席（`computeSessionAttendance`）
+
+每堂課各自計算當天的應到人數：學員是上課那天在這個班的學員（依入班紀錄，回收區的從刪除那天起不算）；服務人員是上課那天已開始服務、還沒刪除，且支援這個班或跨班支援的服務人員（服務人員的支援班別沒有歷史紀錄，以目前的設定計算）。有報到或執勤的人一定算在應到人數內，出席率不會超過 100%。
 
 ### gifts 禮品
 

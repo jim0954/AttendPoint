@@ -470,6 +470,11 @@
                 return html`<label class="check chip"><input type="checkbox" data-class value="${c.id}" ${p && p.classIds.indexOf(c.id) !== -1 ? 'checked' : ''} />${c.name}</label>`;
               })}</div>
             </div>
+            <div class="field">
+              <label>開始服務日期</label>
+              <input class="input" type="date" name="joinDate" value="${p ? p.joinDate || '' : App.today()}" />
+              <span class="hint">計算每堂課應到的服務人員；在這天之前的課不算缺席</span>
+            </div>
             <div class="field full"><label>備註</label><input class="input" name="note" value="${p ? p.note : ''}" maxlength="200" /></div>
             <button type="submit" class="btn btn-primary full">儲存</button>
           </form>`,
@@ -479,6 +484,7 @@
             const f = App.formData(m);
             const classIds = App.$$('[data-class]', m).filter(function (x) { return x.checked; }).map(function (x) { return x.value; });
             const fields = { name: f.name, role: f.role, note: f.note, classIds: classIds };
+            if (f.joinDate) fields.joinDate = f.joinDate;
             const op = p ? { type: 'staff.update', id: p.id, patch: fields } : Object.assign({ type: 'staff.create' }, fields);
             App.run(op).then(function () {
               close();

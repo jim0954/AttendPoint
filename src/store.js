@@ -222,8 +222,10 @@
 
   /**
    * 每堂課的出席：{ 課次 id: { students, absentStudents, studentTotal, staff, absentStaff, staffTotal } }（都是 id 陣列）。
-   * 應到學員 = 這個班目前的學員；應到服務人員 = 支援這個班或跨班支援的服務人員（與點名頁相同）。
-   * 已經報到或執勤、後來刪除或換班的人也算在應到人數內，出席率不會超過 100%。
+   * 每堂課各自計算當天的應到人數：
+   *   學員 = 上課那天在這個班的學員（依入班紀錄，回收區的從刪除那天起不算）；
+   *   服務人員 = 上課那天已開始服務、還沒刪除，且支援這個班或跨班支援的服務人員。
+   * 有報到或執勤的人一定算在應到人數內，出席率不會超過 100%。
    */
   function computeSessionAttendance(state) {
     const totals = computeTotals(state);
@@ -231,20 +233,20 @@
     Object.keys(totals).forEach(function (id) {
       totals[id].sessionIds.forEach(function (sid) { (present[sid] = present[sid] || []).push(id); });
     });
-    const liveStaff = {};
-    active(state.staff).forEach(function (p) { liveStaff[p.id] = p; });
     const out = {};
     state.sessions.forEach(function (s) {
       const students = present[s.id] || [];
-      const roster = active(state.students)
-        .filter(function (x) { return x.classId === s.classId; })
+      const roster = state.students
+        .filter(function (x) { return enrolledOn(x, s.classId, s.date); })
         .map(function (x) { return x.id; });
       const absentStudents = roster.filter(function (id) { return students.indexOf(id) === -1; });
       const staff = (s.dutyStaffIds || []).filter(function (id) { return state.staff.some(function (p) { return p.id === id; }); });
-      const staffRoster = Object.keys(liveStaff).filter(function (id) {
-        const ids = liveStaff[id].classIds || [];
+      const staffRoster = state.staff.filter(function (p) {
+        if (p.deletedAt && p.deletedAt.slice(0, 10) <= s.date) return false;
+        if (p.joinDate && p.joinDate > s.date) return false;
+        const ids = p.classIds || [];
         return !ids.length || ids.indexOf(s.classId) !== -1;
-      });
+      }).map(function (p) { return p.id; });
       const absentStaff = staffRoster.filter(function (id) { return staff.indexOf(id) === -1; });
       out[s.id] = {
         students: students, absentStudents: absentStudents, studentTotal: students.length + absentStudents.length,
@@ -534,7 +536,7 @@
         if (target.id === cls.id) fail('INVALID_INPUT', '目標班別不可與要刪除的班別相同');
         const teamId = teamIdOrNull(target, p.moveStudentsTo.teamId);
         members.forEach(function (s) {
-          s.classId = target.id;
+          moveClass(s, target.id, today(ctx));
           s.teamId = teamId;
           touch(s, ctx);
         });
@@ -669,11 +671,14 @@
     }
     if (!base || 'note' in p) out.note = text(p.note, '備註', { max: 200 });
     if (!base || 'classIds' in p) out.classIds = Array.isArray(p.classIds) ? p.classIds.slice() : [];
+    // 開始服務日期：計算每堂課應到的服務人員（改版前建立的沒有這個欄位，視為一直都在）
+    if ('joinDate' in p && p.joinDate) out.joinDate = date(p.joinDate, '開始服務日期');
     return out;
   }
 
   OPS['staff.create'] = function (state, p, ctx) {
     const fields = staffFields(p, null);
+    if (!fields.joinDate) fields.joinDate = today(ctx);
     fields.classIds.forEach(function (id) { mustFind(state.classes, id, '班別'); });
     const person = Object.assign({ id: ctx.newId('P') }, fields, {
       createdAt: ctx.now(),
@@ -708,6 +713,31 @@
 
   // ----- 學員 -----
 
+  // 入班紀錄：student.enrollments = [{ classId, from, to }]（日期，to 為離開那天、不含；null 表示仍在班上）。
+  // 用來計算每堂課當時的應到學員。改版前建立的學員沒有這個欄位，視為一直在目前的班別。
+  function today(ctx) {
+    return ctx.now().slice(0, 10);
+  }
+
+  /** 學員換班：結束目前的入班紀錄，從 day 起加入新班別 */
+  function moveClass(student, classId, day) {
+    if (student.classId === classId) return;
+    const list = Array.isArray(student.enrollments) ? student.enrollments : [{ classId: student.classId, from: '', to: null }];
+    list.forEach(function (e) { if (!e.to) e.to = day; });
+    list.push({ classId: classId, from: day, to: null });
+    student.enrollments = list;
+    student.classId = classId;
+  }
+
+  /** 學員在 day 那天是否在 classId 班上（回收區的學員從刪除那天起不算） */
+  function enrolledOn(student, classId, day) {
+    if (student.deletedAt && student.deletedAt.slice(0, 10) <= day) return false;
+    if (!Array.isArray(student.enrollments)) return student.classId === classId;
+    return student.enrollments.some(function (e) {
+      return e.classId === classId && e.from <= day && (!e.to || day < e.to);
+    });
+  }
+
   OPS['student.create'] = function (state, p, ctx) {
     const cls = mustFind(state.classes, p.classId, '班別');
     const teamId = teamIdOrNull(cls, p.teamId);
@@ -724,6 +754,7 @@
       teamId: teamId,
       name: text(p.name, '姓名', { required: true, max: 20 }),
       note: text(p.note, '備註', { max: 200 }),
+      enrollments: [{ classId: cls.id, from: p.joinDate ? date(p.joinDate, '入班日期') : today(ctx), to: null }],
       createdAt: ctx.now(),
       updatedAt: ctx.now(),
       deletedAt: null
@@ -732,7 +763,7 @@
     return { id: student.id };
   };
 
-  /** 修改姓名、備註、換小隊、升班。學號不可修改（流水帳以學號對應）。 */
+  /** 修改姓名、備註、換小隊、升班（今天起算新班）、入班日期。學號不可修改（流水帳以學號對應）。 */
   OPS['student.update'] = function (state, p, ctx) {
     const student = mustFind(state.students, p.id, '學員');
     const patch = p.patch || {};
@@ -743,7 +774,18 @@
       // 換班時沒指定小隊就是「不分小隊」；同班時沿用原小隊（patch.teamId 為空字串表示取消小隊）
       const wanted = 'teamId' in patch ? patch.teamId : (cls.id === student.classId ? student.teamId : null);
       student.teamId = teamIdOrNull(cls, wanted);
-      student.classId = cls.id;
+      moveClass(student, cls.id, today(ctx));
+    }
+    // 修改目前這個班的入班日期（例如名冊晚了幾週才建立）
+    if ('joinDate' in patch) {
+      const day = date(patch.joinDate, '入班日期');
+      if (!Array.isArray(student.enrollments)) student.enrollments = [{ classId: student.classId, from: day, to: null }];
+      const current = student.enrollments[student.enrollments.length - 1];
+      if (current.to || current.classId !== student.classId) fail('INVALID_INPUT', '入班紀錄不完整，請洽擁有者');
+      const prev = student.enrollments[student.enrollments.length - 2];
+      if (prev && day < prev.from) fail('INVALID_INPUT', '入班日期不可早於上一個班別的入班日期');
+      if (prev) prev.to = day;
+      current.from = day;
     }
     touch(student, ctx);
     return { id: student.id };
@@ -830,6 +872,7 @@
         teamId: team ? team.id : null,
         name: name,
         note: note,
+        enrollments: [{ classId: cls.id, from: today(ctx), to: null }],
         createdAt: ctx.now(),
         updatedAt: ctx.now(),
         deletedAt: null
@@ -1104,6 +1147,7 @@
     computeStaffDuty: computeStaffDuty,
     computeStaffDutyByClass: computeStaffDutyByClass,
     computeSessionAttendance: computeSessionAttendance,
+    enrolledOn: enrolledOn,
     rateText: rateText,
     isCheckedIn: isCheckedIn,
     findSession: findSession,

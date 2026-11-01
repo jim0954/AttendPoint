@@ -225,9 +225,10 @@ test('報表工作表：學員總表包含計算後的分數', () => {
 
 test('報表工作表：每堂課的出席人數、出席率與名單；服務人員的各班護持堂數', () => {
   const { g, owner, staff, classId, sheets } = setup();
-  const ids = ['王小明', '李小華', '陳大同', '林小美'].map((name) => ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name })).result.id);
-  const p = ok(g.apiApply(owner, { type: 'staff.create', name: '林輔導', role: '護持壇務', classIds: [classId] })).result;
-  ok(g.apiApply(owner, { type: 'staff.create', name: '陳師姐', role: '', classIds: [classId] }));
+  const joinDate = '2026-10-01';
+  const ids = ['王小明', '李小華', '陳大同', '林小美'].map((name) => ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name, joinDate })).result.id);
+  const p = ok(g.apiApply(owner, { type: 'staff.create', name: '林輔導', role: '護持壇務', classIds: [classId], joinDate })).result;
+  ok(g.apiApply(owner, { type: 'staff.create', name: '陳師姐', role: '', classIds: [classId], joinDate }));
   const date = '2026-10-24';
   ok(g.apiApplyBatch(staff, [
     { type: 'points.checkin', studentId: ids[0], date },

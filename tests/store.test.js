@@ -270,6 +270,53 @@ test('每堂出席：學員與服務人員的出席、缺席、應到人數與�
   assert.deepEqual(Store.computeStaffDutyByClass(t.state)[helper.id], { [t.classId]: 1, [other.id]: 1 });
 });
 
+test('每堂應到人數依當天名冊：入班日期、換班、刪除、開始服務日期；改版前的學員視為一直在班上', () => {
+  let now = '2026-10-01T09:00:00';
+  let n = 0;
+  const ctx = { now: () => now, newId: (p) => p + String(++n).padStart(3, '0'), operatorId: 'tester' };
+  let state = Store.emptyState();
+  const run = (op) => { const r = Store.apply(state, op, ctx); state = r.state; return r.result; };
+  const A = run({ type: 'class.create', name: '甲班', idPrefix: 'A' }).id;
+  const B = run({ type: 'class.create', name: '乙班', idPrefix: 'B' }).id;
+  const s1 = run({ type: 'session.save', classId: A, date: '2026-10-03' }).id;
+  const s2 = run({ type: 'session.save', classId: A, date: '2026-10-10' }).id;
+  const s3 = run({ type: 'session.save', classId: A, date: '2026-10-17' }).id;
+  const b3 = run({ type: 'session.save', classId: B, date: '2026-10-17' }).id;
+  const mover = run({ type: 'student.create', classId: A, name: '換班生' }).id; // 10/01 入班
+  const late = run({ type: 'student.create', classId: A, name: '晚來生', joinDate: '2026-10-10' }).id;
+  const legacy = run({ type: 'student.create', classId: A, name: '舊學員' }).id;
+  delete state.students.find((x) => x.id === legacy).enrollments; // 改版前的資料
+  const helper = run({ type: 'staff.create', name: '新壇務', classIds: [A], joinDate: '2026-10-10' }).id;
+
+  now = '2026-10-15T09:00:00';
+  run({ type: 'student.update', id: mover, patch: { classId: B } });
+  assert.deepEqual(state.students.find((x) => x.id === mover).enrollments, [
+    { classId: A, from: '2026-10-01', to: '2026-10-15' },
+    { classId: B, from: '2026-10-15', to: null }
+  ]);
+  now = '2026-10-16T09:00:00';
+  run({ type: 'student.delete', id: late });
+
+  const roster = (sid) => { const a = Store.computeSessionAttendance(state)[sid]; return { students: a.absentStudents.sort(), staffTotal: a.staffTotal }; };
+  assert.deepEqual(roster(s1), { students: [mover, legacy].sort(), staffTotal: 0 }, '晚來生 10/10 才入班；新壇務 10/10 才開始服務');
+  assert.deepEqual(roster(s2), { students: [mover, late, legacy].sort(), staffTotal: 1 });
+  assert.deepEqual(roster(s3), { students: [legacy], staffTotal: 1 }, '換班生 10/15 轉走、晚來生 10/16 刪除');
+  assert.deepEqual(roster(b3), { students: [mover], staffTotal: 0 });
+
+  // 修改入班日期（名冊晚建立）：換班生在乙班的入班日期改成 10/12，上一段跟著結束在 10/12
+  run({ type: 'student.update', id: mover, patch: { joinDate: '2026-10-12' } });
+  assert.deepEqual(state.students.find((x) => x.id === mover).enrollments.map((e) => [e.from, e.to]), [['2026-10-01', '2026-10-12'], ['2026-10-12', null]]);
+  assert.throws(() => run({ type: 'student.update', id: mover, patch: { joinDate: '2026-09-01' } }), (e) => e.code === 'INVALID_INPUT');
+  // 舊學員第一次換班：之前視為一直在原本的班
+  run({ type: 'student.update', id: legacy, patch: { classId: B } });
+  assert.deepEqual(state.students.find((x) => x.id === legacy).enrollments[0], { classId: A, from: '', to: '2026-10-16' });
+  assert.equal(Store.enrolledOn(state.students.find((x) => x.id === legacy), A, '2026-10-03'), true);
+  // 刪除班別時轉班也記下入班紀錄
+  const c = run({ type: 'student.create', classId: A, name: '轉出生' }).id;
+  run({ type: 'class.delete', id: A, moveStudentsTo: { classId: B } });
+  assert.equal(state.students.find((x) => x.id === c).enrollments.length, 2);
+});
+
 test('跨年度結算：清空紀錄與課次、永久清除回收區、保留名冊', () => {
   const t = setup();
   t.run({ type: 'points.checkin', studentId: t.a, sessionId: t.sessionId });

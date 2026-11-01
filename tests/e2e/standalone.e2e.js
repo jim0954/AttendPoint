@@ -182,6 +182,38 @@ test('單機版', { skip: SKIP }, async (t) => {
     assert.equal(csv, "\ufeff'=1+1,'@x,'-遲到,-5,王小明");
   });
 
+  await t.test('入班日期：之前的課不算應到；改了入班日期就算進去', async () => {
+    // 一週前的課次（那時名冊還沒建立）
+    const past = await page.evaluate(() => {
+      const d = AttendStore.addDays(App.today(), -7);
+      App.run({ type: 'session.save', classId: App.s.classId, date: d });
+      return { date: d, label: App.dateLabel(d) };
+    });
+    await idle(page);
+    const summary = async () => {
+      await tab(page, 'manage');
+      await page.click('#view [data-action="manage-section"][data-id="sessions"]');
+      return page.locator('#view .list-item', { hasText: past.label }).locator('[data-attendance] summary').innerText();
+    };
+    assert.match(await summary(), /學員 0 \/ 0/, '學員都是今天才入班');
+
+    // 新增學員時入班日期預設今天
+    await tab(page, 'roster');
+    await page.click('#view .toolbar [data-action="edit-student"]');
+    let m = await dialog(page);
+    assert.equal(await m.locator('[name=joinDate]').inputValue(), await page.evaluate(() => App.today()));
+    await m.locator('[data-close]').first().click();
+
+    // 李小華的入班日期改成那一天
+    await page.locator('#view tbody tr', { hasText: '李小華' }).locator('[data-action="edit-student"]').first().click();
+    m = await dialog(page);
+    await m.locator('[name=joinDate]').fill(past.date);
+    await m.locator('button[type=submit]').click();
+    await idle(page);
+    assert.match(await summary(), /學員 0 \/ 1（0%）/);
+    await tab(page, 'checkin');
+  });
+
   await t.test('提示：相同的合併成一則並顯示次數，最多同時 3 則', async () => {
     const texts = () => page.locator('#toastRoot .toast').allInnerTexts();
     await page.evaluate(() => {

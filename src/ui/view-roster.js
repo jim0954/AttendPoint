@@ -59,6 +59,9 @@
       const cls = s ? App.classById(s.classId) : App.cls();
       const classes = App.classes();
       const canAdjust = s && App.can({ type: 'points.adjust', studentId: s.id });
+      // 目前這個班的入班日期（改版前的學員沒有紀錄，留空）
+      const enrolled = s && Array.isArray(s.enrollments) && s.enrollments.length ? s.enrollments[s.enrollments.length - 1].from : '';
+      const joinDate = s ? enrolled : App.today();
       App.modal({
         title: s ? '編輯學員：' + s.name : '新增學員',
         body: html`
@@ -75,6 +78,11 @@
               </select>
             </div>
             <div class="field"><label>小隊</label><select class="select" name="teamId" data-team-select>${teamOptions(cls, s && s.teamId)}</select></div>
+            <div class="field">
+              <label>入班日期</label>
+              <input class="input" type="date" name="joinDate" value="${joinDate}" data-join-date />
+              <span class="hint">計算每堂課應到人數用；在這天之前的課不算缺席${s ? '。升班時從今天起算' : ''}</span>
+            </div>
             <div class="field full"><label>備註（家長聯絡、注意事項，訪客看不到）</label><textarea class="textarea" name="note" maxlength="200">${s ? s.note : ''}</textarea></div>
             <button type="submit" class="btn btn-primary full">儲存</button>
           </form>
@@ -93,13 +101,17 @@
           const form = m.querySelector('form');
           form.querySelector('[data-class-select]').addEventListener('change', function (e) {
             App.setHtml(form.querySelector('[data-team-select]'), teamOptions(App.classById(e.target.value)));
+            // 升班：新班別從今天起算（可再修改）；改回原班則恢復原本的入班日期
+            if (s) form.querySelector('[data-join-date]').value = e.target.value === s.classId ? joinDate : App.today();
           });
           form.addEventListener('submit', function (e) {
             e.preventDefault();
             const f = App.formData(form);
             const op = s
               ? { type: 'student.update', id: s.id, patch: { name: f.name, note: f.note, classId: f.classId, teamId: f.teamId } }
-              : { type: 'student.create', classId: f.classId, teamId: f.teamId, name: f.name, note: f.note, id: f.id };
+              : { type: 'student.create', classId: f.classId, teamId: f.teamId, name: f.name, note: f.note, id: f.id, joinDate: f.joinDate };
+            // 編輯時只有改了日期才送出（升班時預設為今天，與後台換班的日期相同）
+            if (s && f.joinDate && f.joinDate !== joinDate && !(f.classId !== s.classId && f.joinDate === App.today())) op.patch.joinDate = f.joinDate;
             App.run(op).then(function (res) {
               close();
               App.toast(s ? '✏️ 已更新 ' + f.name : `🙏 已新增 ${f.name}（${res.result.id}）`, 'ok');
