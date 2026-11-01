@@ -111,7 +111,8 @@ Apps Script 編輯器 → 左側「專案設定」（齒輪）→ 最下方「�
 ## 6. 之後更新程式
 
 - **網頁**：推送到 `main` 就會自動發布，不用做任何事。
-- **後台**：網頁上方出現「⚠️ 後台程式需要更新」時（代表資料規則或後台程式有改），在電腦上：
+- **後台（建議：自動更新）**：設定一次後，推送到 `main` 時 GitHub Actions 會自動上傳後台、建立新版本，並把現有部署作業指到新版本（網址不變），手機上不用做任何事。只有後台程式真的改變時才建立新版本（Apps Script 每個專案最多 200 個版本）。設定方式見下方「自動更新後台」。
+- **後台（手動）**：沒有設定自動更新時，網頁上方出現「⚠️ 後台程式需要更新」（代表資料規則或後台程式有改），在電腦上：
 
   ```bash
   git pull
@@ -128,6 +129,44 @@ Apps Script 編輯器 → 左側「專案設定」（齒輪）→ 最下方「�
   再到 Apps Script「部署 → 管理部署作業」→ 鉛筆（編輯）→ 版本選「**新版本**」→「部署」。後台網址不會變，不用改 `src/config.js`。
 
   沒有用 clasp 的話，把 `dist/gas/` 的 4 個檔案重新貼上，再發布新版本。
+
+### 自動更新後台（設定一次）
+
+需要一台電腦做一次登入，之後都不用再碰。
+
+1. **開啟 Apps Script API**：到 <https://script.google.com/home/usersettings>，把「Google Apps Script API」打開。
+2. **安裝 Node.js**：命令提示字元輸入 `node -v`，沒有版本號就到 <https://nodejs.org> 安裝 LTS 版，裝好後重開命令提示字元。
+3. **安裝 clasp 並登入**（用放試算表的那個 Google 帳號，在瀏覽器按「允許」）：
+
+   ```bash
+   npm install -g @google/clasp
+   ```
+
+   ```bash
+   clasp login
+   ```
+
+4. **打開授權檔**（Windows；Mac 用 `open -e ~/.clasprc.json`）：
+
+   ```bash
+   notepad %USERPROFILE%\.clasprc.json
+   ```
+
+   這個檔案等於你的 Google 授權，**不要貼給任何人、不要放進 repo**。clasp 2.x、3.x 產生的格式都可以。
+5. **建立 GitHub Secret**：repo 的 Settings → Secrets and variables → Actions → New repository secret，建立三個：
+
+   | Name | 內容 |
+   |---|---|
+   | `CLASPRC_JSON` | `.clasprc.json` 的全部內容 |
+   | `GAS_SCRIPT_ID` | Apps Script 左邊 ⚙️「專案設定」→「指令碼 ID」 |
+   | `GAS_DEPLOYMENT_ID` | 「部署 → 管理部署作業」→ 現有部署的「部署作業 ID」（`AKfyc` 開頭） |
+
+6. **試跑一次**：GitHub 的 Actions →「發布網頁」→「Run workflow」。「更新後台（Apps Script）」這一步出現「✓ 後台網址已是新版本」或「後台已是最新版本」就完成了。
+
+注意：
+- 自動更新會用 `dist/gas/` 整份取代 Apps Script 專案的檔案（`store`、`auth`、`migrate-v2`、`Code` 與設定檔），在 Apps Script 編輯器裡手動加的其他檔案（例如預設的「程式碼.gs」）會被移除。
+- 後台更新失敗時不會發布網頁（避免網頁比後台新）。訊息會說明原因，例如授權過期就在電腦上重新 `clasp login`，再更新 `CLASPRC_JSON`。
+- 轉移到公用帳號時（第 8 節），要用公用帳號重新做一次第 1–5 步。
 
 ### 從舊版（網頁放在 Apps Script）升級
 
@@ -171,7 +210,7 @@ Apps Script 編輯器 → 左側「專案設定」（齒輪）→ 最下方「�
 6. **重新建立壇務帳號**：壇務帳號存在 Script Properties 的 `USERS`（帳號多時分段為 `USERS_2`、`USERS_3`…），不在備份檔裡，請在「擁有者 → 帳號管理」重新建立。
 7. **確認資料**：看一下學員人數、幾位學員的分數與出席，與轉移前一致。
 8. **通知大家重新登入**：網頁網址不變，服務人員用新的壇務帳號登入即可。
-9. **封存舊後台**：在舊帳號的 Apps Script 編輯器「部署 → 管理部署作業」，把舊部署封存。
+9. **封存舊後台**：在舊帳號的 Apps Script 編輯器「部署 → 管理部署作業」，把舊部署封存。有設定自動更新後台的話，用公用帳號重新設定三個 Secret（第 6 節「自動更新後台」），否則會繼續更新到舊後台。
 10. **開放給其他班**：其他班的負責人在「班務管理」新增自己的班別，再建立名冊。
 
 > ⚠️ **順序很重要：先匯入試行班的資料（第 5 步），再讓其他班開始建班（第 10 步）。**

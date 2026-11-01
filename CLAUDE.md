@@ -8,7 +8,7 @@
 - 修改資料規則一定要補測試，`npm test` 全部通過才 commit。
 - 介面改完要跑 `npm run e2e`（瀏覽器自動化測試，單機版＋模擬雲端版），新功能要補對應的 e2e 步驟；必要時再用瀏覽器實際操作驗證（`npm run gas-sim` 可模擬雲端版）。
 - 不要把真實學員資料、PIN、`.clasp.json`，以及佛堂 LOGO 等組織圖檔放進 repo（repo 是公開的）；範例名字一律用假資料。LOGO 由擁有者從網頁上傳，存在後台 `_logo` 工作表。
-- 網頁推到 `main` 會自動發布；改到後台檔案（`store.js`、`auth.js`、`migrate-v2.js`、`Code.js`）時，回報中要提醒使用者更新 Apps Script（`npm run build` → `clasp push` → 發布新版本），網頁也會自動顯示「後台程式需要更新」。
+- 網頁推到 `main` 會自動發布；有設定 Secret（`CLASPRC_JSON`、`GAS_SCRIPT_ID`、`GAS_DEPLOYMENT_ID`）時，後台也由 `scripts/deploy-gas.js` 自動更新（只在版本指紋改變時建立新版本）。改到後台檔案（`store.js`、`auth.js`、`migrate-v2.js`、`Code.js`）時，回報中要說明後台會自動更新，並請使用者確認 Actions 的「更新後台」步驟成功；還沒設定 Secret 時則提醒手動更新 Apps Script（見 `docs/deploy-gas.md` 第 6 節）。
 
 ## 架構
 
@@ -19,7 +19,7 @@
 | `src/migrate-v2.js` | v2 資料移轉、`loadAny()` |
 | `src/Code.js` | Google Apps Script 後台：`doPost` 接收網頁 fetch 的 API 呼叫 |
 | `src/config.js` | 雲端版設定（後台網址 `GAS_URL`） |
-| `.github/workflows/pages.yml` | 推送到 `main` 時測試、建置並發布網頁到 GitHub Pages |
+| `.github/workflows/pages.yml` | 推送到 `main` 時測試、建置、自動更新後台（`scripts/deploy-gas.js`），並發布網頁到 GitHub Pages |
 | `src/ui/` | 網頁介面（原生 JS，`App.html` 樣板自動跳脫） |
 | `scripts/build.js` | 產生 `dist/AttendPoint.html`（單機版）、`dist/web/`（GitHub Pages）與 `dist/gas/`（後台，含版本指紋） |
 | `docs/` | 資料結構、權限、部署說明 |
@@ -37,6 +37,7 @@
 - 6-4：LOGO 由擁有者在「系統與備份」上傳，存在後台（`apiGetLogo`／`apiSetLogo`），不放進 repo。
 - 6-5：服務人員職務固定為點傳師、主壇務、副主壇務、護持壇務（`AttendStore.STAFF_ROLES`，後台也檢查）。6-6～6-10：外部審查（`REQUEST.md`，結果 `FINDINGS.md` 不進 repo）與修正，處理結果記在 `REQUEST.md` 的「已知問題」。6-10 加強登入安全（PIN 至少 6 位、失敗次數加鎖、改 PIN 後舊登入失效）並隱藏訪客看到的自行輸入事由。
 - 6-12 提示訊息合併；6-13、6-14 服務人員各班護持堂數、每堂學員與服務人員的出席率與名單（`AttendStore.computeSessionAttendance`，網頁課次列表與「課次」報表工作表）。
+- 6-15：自動更新後台（GitHub Actions 以 Apps Script API 上傳、建立版本、更新現有部署作業；Secret 未設定時略過）。
 - 6-11：連續操作合併送出（`apiApplyBatch`，後台只讀寫試算表一次），還沒同步完成時關閉網頁先提醒。
 - 尚未部署到真正的 Google Apps Script 實測（階段 4 其餘測試、階段 5 GitHub 門面與部署、階段 6 佛堂試行）。
 - 根目錄 `AttendPoint.html` 是 v2 舊版，`tests/migrate-v2.test.js` 用它當移轉測試資料。

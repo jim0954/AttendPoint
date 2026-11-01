@@ -1,6 +1,7 @@
-# 推送到 main 時：跑測試 → 建置 → 把雲端版網頁（dist/web/）發布到 GitHub Pages。
+# 推送到 main 時：跑測試 → 建置 → 更新 Apps Script 後台（有設定 Secret 時）→ 把雲端版網頁（dist/web/）發布到 GitHub Pages。
 # 第一次使用前，請到 GitHub 的 Settings → Pages，Source 選「GitHub Actions」。
-# 這個流程只發布網頁，不會碰 Google Apps Script（後台用 clasp push 更新，見 docs/deploy-gas.md）。
+# 自動更新後台需要 Secret：CLASPRC_JSON、GAS_SCRIPT_ID、GAS_DEPLOYMENT_ID（見 docs/deploy-gas.md）；沒有設定時略過。
+# 後台更新失敗時不發布網頁，避免網頁比後台新。
 name: 發布網頁
 
 on:
@@ -29,6 +30,12 @@ jobs:
         run: npm test
       - name: 建置
         run: npm run build
+      - name: 更新後台（Apps Script）
+        run: node scripts/deploy-gas.js
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
