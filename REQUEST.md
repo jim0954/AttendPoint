@@ -27,20 +27,20 @@
 
 ## 審查範圍
 
-- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-19 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
-- **這次特別注意上次審查（`699a366`）之後的修改**：`git diff 699a366 -- src scripts .github` 約 +490／−50 行，內容見下方「參考：近期修改」的階段 6-10～6-16。
+- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-20 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
+- **這次特別注意最近兩輪的修改**：上次外部審查（`699a366`）之後的階段 6-10～6-19，其中 6-18、6-19 是上一份審查請求（`a7877e6`）之後才加的（`git diff a7877e6 -- src scripts .github` 約 +170／−80 行）：自動更新後台改用 API 比對版本、自動報表省略讀取（`DATA_VERSION`／`REPORT_PLAN`）、登入計數改用文件鎖、actions 固定 SHA、每堂應到人數依當天名冊（學員入班紀錄 `enrollments`、服務人員開始服務日期 `joinDate`）。
 - **排除**：根目錄 `AttendPoint.html`（舊版 v2，只當移轉測試資料）、`dist/`（建置產物，不在 repo 裡）。
-- 主要檔案（總共約 9,600 行，含測試與腳本）：
+- 主要檔案（總共約 9,800 行，含測試與腳本）：
 
 | 區塊 | 檔案 | 內容 |
 |---|---|---|
-| 資料層 | `src/store.js`（1118 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次；`computeSessionAttendance`（每堂出席、缺席、應到人數）、`computeStaffDutyByClass` |
+| 資料層 | `src/store.js`（1162 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次；`computeSessionAttendance`（每堂出席、缺席、依當天名冊的應到人數）、入班紀錄 `enrollments`（`moveClass`、`enrolledOn`）、`computeStaffDutyByClass` |
 | 權限 | `src/auth.js`（342 行） | `authorize`（擁有者限定的操作、壇務只能撤銷自己今天的紀錄、壇務不能移除小隊與規則）、`viewFor`（訪客遮蔽，含 `guestReason` 隱藏自行輸入的事由）、`syncView`／`mergeView`（增量同步）、PIN 雜湊、帳號操作 |
 | 移轉 | `src/migrate-v2.js`（367 行） | v2 資料轉換、`loadAny()` |
-| 後台 | `src/Code.js`（693 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長，記下 PIN 指紋）、錯誤 5 次鎖定（鎖內先記次數）、`apiApplyBatch` 合併送出、`autoRebuildReports` 下課後自動更新報表（觸發條件）、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
+| 後台 | `src/Code.js`（722 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長，記下 PIN 指紋）、錯誤 5 次鎖定（鎖內先記次數）、`apiApplyBatch` 合併送出、`autoRebuildReports` 下課後自動更新報表（觸發條件，以 `DATA_VERSION`／`REPORT_PLAN` 省略不必要的讀取）、登入計數用文件鎖、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
 | 介面 | `src/ui/*.js` | `backend.js`（雲端 fetch／單機 localStorage、增量合併）、`app.js`（樂觀更新佇列與合併送出、關閉前提醒、外框、LOGO）、`lib.js`（`App.html` 自動跳脫樣板、提示訊息合併）、各分頁 `view-*.js` |
 | 設定 | `src/config.js` | 後台網址 `GAS_URL`（公開，不是秘密） |
-| 建置與發布 | `scripts/build.js`、`scripts/deploy-gas.js`（160 行）、`.github/workflows/pages.yml` | 產生單機版、Pages 網頁、後台；後台版本指紋寫進兩邊，網頁比對不同時提示更新後台；`deploy-gas.js` 以 Apps Script API 上傳後台、建立版本、更新現有部署作業（授權來自 Secret `CLASPRC_JSON` 的 refresh token） |
+| 建置與發布 | `scripts/build.js`、`scripts/deploy-gas.js`（151 行）、`.github/workflows/pages.yml` | 產生單機版、Pages 網頁、後台；後台版本指紋寫進兩邊，網頁比對不同時提示更新後台；`deploy-gas.js` 以 Apps Script API 比對部署作業的版本指紋、上傳後台、建立版本、更新現有部署作業並確認（授權來自 Secret `CLASPRC_JSON` 的 refresh token） |
 | 模擬與量測 | `scripts/gas-mock.js`、`scripts/gas-sim.js`、`scripts/stress.js` | Node／瀏覽器模擬 Apps Script；壓力測試 |
 | 測試 | `tests/*.test.js`、`tests/e2e/*.e2e.js` | 單元測試（node:test）、瀏覽器測試（Playwright） |
 
@@ -78,9 +78,9 @@ npm run e2e
 
 ## 已驗證事項（請仍獨立判斷）
 
-- **自動測試（2026-11-01）**
+- **自動測試（2026-11-01，階段 6-19）**
   - `npm test`：95 項全過（資料層、權限、增量同步、v2 移轉、後台在 Node 模擬環境的完整流程、寫入失敗、資料工作表遺失或損壞、備份清理、`doPost` 白名單、LOGO、建置設定、登入次數與 PIN 指紋、合併送出、每堂出席、下課後自動更新報表、`deploy-gas.js` 的請求流程）。
-  - `npm run e2e`：31 項全過，分單機版與模擬雲端版兩組。內容包括：建班、名冊、點名、加減分、兌換、撤銷、重新開啟、名字含 HTML、訪客遮蔽、壇務權限、多裝置增量同步、寫入失敗退回、登入逾時、後台版本提示、存取權錯誤提示、服務人員點名、LOGO 上傳、職務選單、舊職務保留、連續操作合併送出、關閉前提醒、提示訊息合併、各班護持堂數、每堂出席率與名單。
+  - `npm run e2e`：31 項全過，分單機版與模擬雲端版兩組。內容包括：建班、名冊、點名、加減分、兌換、撤銷、重新開啟、名字含 HTML、訪客遮蔽、壇務權限、多裝置增量同步、寫入失敗退回、登入逾時、後台版本提示、存取權錯誤提示、服務人員點名、LOGO 上傳、職務選單、舊職務保留、連續操作合併送出、關閉前提醒、提示訊息合併、各班護持堂數、每堂出席率與名單、入班日期影響應到人數。
   - GitHub Actions「發布網頁」每次推送都會跑 `npm test` 並發布。
 - **壓力測試**（Node、記憶體模擬試算表，見 `docs/stress-test.md`）
   - 中型規模（3 班 × 50 人、一年）約 4.3 MB。
@@ -141,9 +141,17 @@ npm run e2e
    - `.github/workflows/pages.yml` 的權限、使用的 actions 是否固定版本。
    - 公開 repo 中有沒有不該公開的內容（PIN、`.clasp.json`、試算表 ID、真實姓名、組織圖檔）。
 
-## 已知問題（前五次審查找到，請確認或補充）
+## 已知問題（前六次審查找到，請確認或補充）
 
 第一次審查只看了階段 6-5（職務下拉選單），找到 5 項，都已在階段 6-7、6-8 處理。第二次是全 repo 審查（基準 `0f8c508`），找到 16 項，以下依那次的編號列出。第三次是 Claude 的安全性複查，找到 A–C 三項；第四次 Gemini 的安全性審查確認了 A–C，另有幾項低風險發現。
+
+**第六次審查（Claude，基準 `d2d7fac`，針對階段 6-18、6-19）找到，尚未修正：**
+
+- J（低，確定）匯入名冊（`student.import`）沒有入班日期，新學員一律從匯入當天起算。學期中途才匯入整班名冊時，之前每堂課的應到人數只剩有報到的人，出席率會偏高（常見 100%）。建議匯入時可指定入班日期（對話框欄位或 CSV 欄位）。
+- K（低，確定）還原回收區的學員後，刪除期間的課次也算應到：`enrolledOn` 只看目前的 `deletedAt`，還原時清掉就沒有紀錄（`src/store.js` 的 `student.restore`）。建議刪除時結束入班紀錄、還原時從還原當天重新開始。
+- L（低，確定）`writeState_` 寫完資料後才寫指令碼屬性 `DATA_VERSION`；這一步若失敗（例如屬性配額），資料已寫入但操作回報失敗，網頁會先退回、下次重新整理才出現；`DATA_VERSION` 也會停在舊值，自動報表可能把「資料沒變」誤判到下一個到期時間為止。
+- M（低，推測）登入計數改用 `LockService.getDocumentLock()`，在網頁應用程式（以部署者身分執行、綁在試算表上的專案）中是否確實取得文件鎖，還沒在真實環境確認；取不到時會退回指令碼鎖，功能不受影響。
+- N（建議）學員總表（報表工作表與 CSV）沒有入班日期欄位，無法核對每堂應到人數的依據。
 
 **第五次審查（Claude，基準 `92a8cbd`，針對階段 6-10～6-16）找到，已在階段 6-18 修正（請確認修正是否正確）：**
 
@@ -151,6 +159,9 @@ npm run e2e
 - E（中）`autoRebuildReports` 原本每 10 分鐘都讀整份資料。改為寫入資料時把資料版本記在指令碼屬性 `DATA_VERSION`（不會過期，不同於 CacheService），自動報表讀過資料後記下 `REPORT_PLAN`（資料版本、下一個到期時間）；資料沒變、也還沒到期時直接略過，不讀試算表。改版前沒有 `DATA_VERSION` 的資料照舊每次讀。
 - F（低）`apiLogin` 的計數原本與寫入資料共用指令碼鎖。改用 `LockService.getDocumentLock()`（專案綁在試算表上時才有，否則退回指令碼鎖）。
 - I（建議）`.github/workflows/pages.yml` 的 actions 改為固定到 commit SHA（註解保留版本標籤）。
+
+**第五次審查找到，已在階段 6-19 修正（請確認修正是否正確）：**
+
 - H（低）出席率的應到學員原本是「目前」在這個班的學員。已在階段 6-19 改為每堂課依當天名冊計算：學員記錄入班紀錄 `enrollments`（入班日期、換班、刪除），服務人員記錄開始服務日期 `joinDate`；改版前的資料沒有這些欄位，視為一直都在。請確認換班、修改入班日期、刪除與還原時的計算。
 
 **第五次審查找到，評估後不修改：**
@@ -224,7 +235,8 @@ npm run e2e
 8. **測試本身**（較低優先）：有沒有測試其實沒驗證到它聲稱的事（例如等待條件太寬、比對用部分字串）。
 
 9. **出席統計與自動報表**（`AttendStore.computeSessionAttendance`、`computeStaffDutyByClass`、`Code.js` 的 `rebuildReportSheets`、`autoRebuildReports`、`reportDueAt_`）
-   - 出席、缺席、應到人數在刪除學員、換班、撤銷報到、跨班支援的服務人員時是否正確，出席率會不會超過 100%。
+   - 出席、缺席、應到人數在刪除與還原學員、換班（`student.update`、刪除班別時轉班）、修改入班日期（`patch.joinDate`）、撤銷報到、跨班支援的服務人員、改版前沒有 `enrollments`／`joinDate` 的資料時是否正確，出席率會不會超過 100%。
+   - `enrollments` 能否被壇務自己組的 op 竄改（例如 `student.update` 的 patch、`student.import`、匯入備份），訪客畫面會不會洩漏入班紀錄或開始服務日期。
    - 自動更新的時間判斷：跨日、沒有結束時間的課次、課後才修改的課次、觸發條件漏跑一次或重建失敗時，會不會漏更新或重複更新。
    - 網頁課次列表與報表工作表是否用同一套計算、結果一致。
 
@@ -232,7 +244,8 @@ npm run e2e
 
 | commit | 內容 |
 |---|---|
-| 階段 6-19 | 每堂應到人數依當天名冊（入班紀錄、開始服務日期） |
+| 階段 6-20 | 更新 REQUEST.md（第六次審查） |
+| 階段 6-19 | 每堂應到人數依當天名冊（入班紀錄、開始服務日期）；自動更新後台的發布確認多等幾次 |
 | 階段 6-18 | 修正第五次審查 D、E、F、I |
 | 階段 6-16 | 下課後半小時自動更新報表（`autoRebuildReports`，觸發條件每 10 分鐘） |
 | 階段 6-15 | 自動更新後台（`scripts/deploy-gas.js`、Actions 的「更新後台」步驟） |
