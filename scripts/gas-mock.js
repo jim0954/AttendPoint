@@ -52,6 +52,7 @@ function createGas(propsInit) {
     getSheets: () => Object.values(sheets).filter(Boolean),
     deleteSheet: (sh) => { delete sheets[sh.getName()]; }
   };
+  const locks = [];
   const context = {
     console,
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss, flush() {}, getUi: () => { throw new Error('no ui'); } },
@@ -70,7 +71,11 @@ function createGas(propsInit) {
         remove: (k) => { delete cache[k]; }
       })
     },
-    LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
+    // 記錄用了哪一把鎖（指令碼鎖給寫入資料、文件鎖給登入計數）
+    LockService: {
+      getScriptLock: () => ({ tryLock: () => { locks.push('script'); return true; }, releaseLock() {} }),
+      getDocumentLock: () => ({ tryLock: () => { locks.push('document'); return true; }, releaseLock() {} })
+    },
     Session: { getScriptTimeZone: () => 'Asia/Taipei' },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' },
@@ -90,7 +95,7 @@ function createGas(propsInit) {
   };
   vm.createContext(context);
   LOAD_ORDER.forEach((f) => vm.runInContext(fs.readFileSync(path.join(SRC, f), 'utf8'), context, { filename: f }));
-  return { gas: context, sheets, props, cache };
+  return { gas: context, sheets, props, cache, locks };
 }
 
 module.exports = { createGas, mockSheet };

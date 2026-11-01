@@ -12,7 +12,8 @@
  *   USERS…          壇務帳號（USERS、USERS_2…、USERS_PARTS，由系統自動維護，請勿手動修改）
  *   DATA_SHEET      目前使用中的資料工作表（由系統自動維護，請勿手動修改）
  *   BACKUP_KEEP     自動保留的備份份數（選填，預設 10；跨年度結算的備份一律保留，不計入）
- *   REPORT_CHECKED_AT  下課後自動更新報表的上次檢查時間（由系統自動維護）
+ *   DATA_VERSION    目前資料的版本（由系統自動維護）
+ *   REPORT_CHECKED_AT、REPORT_PLAN  下課後自動更新報表的檢查紀錄（由系統自動維護）
  *
  * 所有 api* 函式都回傳 { ok: true, ... } 或 { ok: false, code, message }，不會丟出例外。
  */
@@ -120,8 +121,8 @@ function newToken_() {
   return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
 }
 
-function withLock_(fn) {
-  const lock = LockService.getScriptLock();
+function withLock_(fn, lock) {
+  lock = lock || LockService.getScriptLock();
   if (!lock.tryLock(LOCK_WAIT_MS)) throw appError_('BUSY', '目前使用人數較多，請稍後再試一次');
   try {
     return fn();
@@ -238,10 +239,15 @@ function syncKey_(info) {
   return info.syncId + ':' + info.rev;
 }
 
+// 資料版本也記在指令碼屬性（不會過期），自動更新報表用來判斷資料有沒有變，不必讀試算表
+const DATA_VERSION = 'DATA_VERSION';
+
 function writeState_(state) {
   cache_().remove(SYNC_KEY);
   writeData_(JSON.stringify(state));
-  cache_().put(SYNC_KEY, syncKey_(AttendAuth.syncInfo(state)), TOKEN_TTL);
+  const key = syncKey_(AttendAuth.syncInfo(state));
+  props_().setProperty(DATA_VERSION, key);
+  cache_().put(SYNC_KEY, key, TOKEN_TTL);
 }
 
 // ---------- 帳號 ----------
@@ -344,18 +350,28 @@ function apiLoginOptions() {
   });
 }
 
+/** 登入計數用的鎖：專案綁在試算表上時用文件鎖（與寫入資料的指令碼鎖分開），否則退回指令碼鎖 */
+function loginLock_() {
+  try {
+    return LockService.getDocumentLock() || LockService.getScriptLock();
+  } catch (e) {
+    return LockService.getScriptLock();
+  }
+}
+
 function apiLogin(userId, pin) {
   return respond_(function () {
     // 帳號 id 很短；過長的值（快取鍵上限 250 字）直接當成帳號不正確
     if (typeof userId !== 'string' || userId.length > 64) throw appError_('WRONG_PIN', '帳號或 PIN 碼不正確');
     const failKey = 'fail:' + userId;
-    // 先在鎖內把這次嘗試記上去，再比對 PIN：同時送出大量登入請求也只有前 5 次會被比對
+    // 先在鎖內把這次嘗試記上去，再比對 PIN：同時送出大量登入請求也只有前 5 次會被比對。
+    // 用另一把鎖（試算表的文件鎖），大量登入請求不會和點名寫入搶同一把鎖
     const fails = withLock_(function () {
       const n = Number(cache_().get(failKey) || 0);
       if (n >= MAX_FAILS) throw appError_('LOCKED', '嘗試次數過多，請 15 分鐘後再試');
       cache_().put(failKey, String(n + 1), FAIL_WINDOW);
       return n;
-    });
+    }, loginLock_());
     const user = findUser_(userId);
     if (!user || user.disabled || !checkPin_(user, pin)) {
       const left = MAX_FAILS - fails - 1;
@@ -574,9 +590,11 @@ function writeTable_(name, header, rows) {
 // 在 Apps Script「觸發條件」設定 autoRebuildReports 每 10 分鐘執行（見 docs/deploy-gas.md 第 7 節）。
 // 每次只檢查：有課次「結束時間＋30 分鐘」在上次檢查之後到了，才重建報表；沒有就不動試算表。
 // 課次沒有填結束時間時，以這堂課最後一次點名、加分或服務人員點名的時間＋30 分鐘代替。
+// 讀過資料後記下資料版本與「下一個到期時間」：資料沒變、也還沒到期時，下次檢查不必讀試算表。
 
 const REPORT_DELAY_MIN = 30;
 const REPORT_CHECKED_AT = 'REPORT_CHECKED_AT';
+const REPORT_PLAN = 'REPORT_PLAN';
 
 /** 'yyyy-MM-ddTHH:mm[:ss]'（當地時間）加幾分鐘，回傳 'yyyy-MM-ddTHH:mm' */
 function addMinutes_(local, minutes) {
@@ -591,27 +609,38 @@ function reportDueAt_(session, lastActivity) {
   return lastActivity ? addMinutes_(lastActivity, REPORT_DELAY_MIN) : null;
 }
 
-/** 觸發條件呼叫：到了就重建報表，回傳 'rebuilt' 或 'idle' */
+/** 觸發條件呼叫：到了就重建報表，回傳 'rebuilt'、'idle'（讀過資料，沒有到期）或 'skipped'（沒讀資料） */
 function autoRebuildReports() {
   const props = props_();
   const now = nowIso_().slice(0, 16);
   const last = props.getProperty(REPORT_CHECKED_AT);
-  let due = !last; // 第一次執行先更新一次
-  if (!due) {
-    const state = readState_();
-    const activity = {};
-    state.logs.forEach(function (l) {
-      if (l.sessionId && !(activity[l.sessionId] >= l.at)) activity[l.sessionId] = l.at;
-    });
-    due = state.sessions.some(function (s) {
-      if (s.deletedAt) return false;
-      const lastActivity = [activity[s.id], s.updatedAt].filter(Boolean).sort().pop();
-      const at = reportDueAt_(s, lastActivity);
-      return !!at && at > last && at <= now;
-    });
+  // 先記下資料版本再讀資料：讀的期間有人寫入的話，版本對不上，下次會再讀一次
+  const version = props.getProperty(DATA_VERSION);
+  let plan = null;
+  try { plan = JSON.parse(props.getProperty(REPORT_PLAN) || 'null'); } catch (e) { /* 重新計算 */ }
+  if (last && version && plan && plan.version === version && !(plan.nextDue && plan.nextDue <= now)) {
+    props.setProperty(REPORT_CHECKED_AT, now);
+    return 'skipped';
   }
+
+  const state = readState_();
+  const activity = {};
+  state.logs.forEach(function (l) {
+    if (l.sessionId && !(activity[l.sessionId] >= l.at)) activity[l.sessionId] = l.at;
+  });
+  let due = !last; // 第一次執行先更新一次
+  let nextDue = null;
+  state.sessions.forEach(function (s) {
+    if (s.deletedAt) return;
+    const lastActivity = [activity[s.id], s.updatedAt].filter(Boolean).sort().pop();
+    const at = reportDueAt_(s, lastActivity);
+    if (!at) return;
+    if (at > (last || '') && at <= now) due = true;
+    if (at > now && !(nextDue && nextDue <= at)) nextDue = at;
+  });
   if (due) rebuildReportSheets();
-  props.setProperty(REPORT_CHECKED_AT, now); // 重建失敗時不會記錄，下次再試
+  // 重建失敗時不會記錄，下次再試
+  props.setProperties({ REPORT_CHECKED_AT: now, REPORT_PLAN: JSON.stringify({ version: version, nextDue: nextDue }) });
   return due ? 'rebuilt' : 'idle';
 }
 

@@ -56,7 +56,8 @@ const mocks = `
     put: function (k, v) { cache[k] = String(v); },
     remove: function (k) { delete cache[k]; }
   }; } };
-  window.LockService = { getScriptLock: function () { return { tryLock: function () { return true; }, releaseLock: function () {} }; } };
+  const lock = function () { return { tryLock: function () { return true; }, releaseLock: function () {} }; };
+  window.LockService = { getScriptLock: lock, getDocumentLock: lock };
   window.Session = { getScriptTimeZone: function () { return 'Asia/Taipei'; } };
   window.Utilities = {
     DigestAlgorithm: { SHA_256: 'sha256' },

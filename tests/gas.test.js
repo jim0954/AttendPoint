@@ -244,35 +244,53 @@ test('報表工作表：每堂課的出席人數、出席率與名單；服務�
   assert.equal(staffRows.find((r) => r[0] === '林輔導')[4], '兒童讀經班 1');
 });
 
-test('下課後自動更新報表：結束時間（或最後活動時間）＋30 分鐘後的第一次檢查才重建', () => {
+test('下課後自動更新報表：結束時間（或最後活動時間）＋30 分鐘後的第一次檢查才重建；資料沒變且未到期時不讀試算表', () => {
   const { g, owner, staff, classId, sheets, props } = setup();
   const stu = ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name: '王小明' })).result;
   const at = (t) => { g.nowIso_ = () => t; };
-  at('2026-10-24T08:00:00');
-  assert.equal(g.autoRebuildReports(), 'rebuilt', '第一次執行先更新一次');
+  let reads = 0;
+  const read = g.readState_;
+  g.readState_ = function () { reads++; return read(); };
+  const check = (t) => { at(t); reads = 0; return g.autoRebuildReports(); };
+
+  assert.equal(check('2026-10-24T08:00:00'), 'rebuilt', '第一次執行先更新一次');
   assert.ok(sheets['課次']);
-  // 有結束時間的課次：09:30–11:30，11:50 還不到，12:00 之後第一次檢查才更新，之後不再重複
+  // 有結束時間的課次：09:30–11:30，12:00 之後第一次檢查才更新，之後不再重複
   ok(g.apiApply(owner, { type: 'session.save', classId, date: '2026-10-24', start: '09:30', end: '11:30' }));
   at('2026-10-24T10:00:00');
   ok(g.apiApply(staff, { type: 'points.checkin', studentId: stu.id, date: '2026-10-24' }));
-  at('2026-10-24T11:50:00');
-  assert.equal(g.autoRebuildReports(), 'idle');
+  assert.equal(check('2026-10-24T11:40:00'), 'idle', '資料變了：讀一次，還沒到期');
+  assert.equal(reads, 1);
   assert.equal(sheets['課次'].cells().length, 1, '還沒更新：只有標題列');
-  at('2026-10-24T12:05:00');
-  assert.equal(g.autoRebuildReports(), 'rebuilt');
+  assert.equal(check('2026-10-24T11:50:00'), 'skipped', '資料沒變、還沒到期：不讀試算表');
+  assert.equal(reads, 0);
+  assert.equal(check('2026-10-24T12:05:00'), 'rebuilt', '到期了');
   assert.equal(sheets['課次'].cells()[1][4], '1 / 1');
-  at('2026-10-24T12:15:00');
-  assert.equal(g.autoRebuildReports(), 'idle');
+  assert.equal(check('2026-10-24T12:15:00'), 'skipped', '沒有下一個到期時間');
+  assert.equal(reads, 0);
   // 沒有結束時間的課次：最後一次點名或服務人員點名＋30 分鐘
   const p = ok(g.apiApply(owner, { type: 'staff.create', name: '林輔導', role: '', classIds: [classId] })).result;
   at('2026-10-31T19:00:00');
   ok(g.apiApply(staff, { type: 'session.duty', classId, staffId: p.id, date: '2026-10-31' }));
-  at('2026-10-31T19:20:00');
-  assert.equal(g.autoRebuildReports(), 'idle');
-  at('2026-10-31T19:40:00');
-  assert.equal(g.autoRebuildReports(), 'rebuilt');
+  assert.equal(check('2026-10-31T19:20:00'), 'idle');
+  assert.equal(check('2026-10-31T19:25:00'), 'skipped');
+  assert.equal(check('2026-10-31T19:40:00'), 'rebuilt');
   assert.equal(props.REPORT_CHECKED_AT, '2026-10-31T19:40');
+  // 改版前的資料沒有 DATA_VERSION：每次都讀
+  delete props.DATA_VERSION;
+  assert.equal(check('2026-10-31T19:50:00'), 'idle');
   assert.equal(g.addMinutes_('2026-10-31T23:50', 30), '2026-11-01T00:20', '跨日');
+});
+
+test('登入計數用文件鎖，與寫入資料的指令碼鎖分開', () => {
+  const env = setup();
+  const { g, staff, locks } = env;
+  locks.length = 0;
+  g.apiLogin('U-owner', '000000');
+  assert.deepEqual(locks, ['document']);
+  locks.length = 0;
+  ok(g.apiApply(staff, { type: 'gift.create', name: '文具', cost: 1 }));
+  assert.deepEqual(locks, ['script']);
 });
 
 test('報表工作表：開頭像公式的文字以純文字寫入，數字不變', () => {
