@@ -244,6 +244,37 @@ test('報表工作表：每堂課的出席人數、出席率與名單；服務�
   assert.equal(staffRows.find((r) => r[0] === '林輔導')[4], '兒童讀經班 1');
 });
 
+test('下課後自動更新報表：結束時間（或最後活動時間）＋30 分鐘後的第一次檢查才重建', () => {
+  const { g, owner, staff, classId, sheets, props } = setup();
+  const stu = ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name: '王小明' })).result;
+  const at = (t) => { g.nowIso_ = () => t; };
+  at('2026-10-24T08:00:00');
+  assert.equal(g.autoRebuildReports(), 'rebuilt', '第一次執行先更新一次');
+  assert.ok(sheets['課次']);
+  // 有結束時間的課次：09:30–11:30，11:50 還不到，12:00 之後第一次檢查才更新，之後不再重複
+  ok(g.apiApply(owner, { type: 'session.save', classId, date: '2026-10-24', start: '09:30', end: '11:30' }));
+  at('2026-10-24T10:00:00');
+  ok(g.apiApply(staff, { type: 'points.checkin', studentId: stu.id, date: '2026-10-24' }));
+  at('2026-10-24T11:50:00');
+  assert.equal(g.autoRebuildReports(), 'idle');
+  assert.equal(sheets['課次'].cells().length, 1, '還沒更新：只有標題列');
+  at('2026-10-24T12:05:00');
+  assert.equal(g.autoRebuildReports(), 'rebuilt');
+  assert.equal(sheets['課次'].cells()[1][4], '1 / 1');
+  at('2026-10-24T12:15:00');
+  assert.equal(g.autoRebuildReports(), 'idle');
+  // 沒有結束時間的課次：最後一次點名或服務人員點名＋30 分鐘
+  const p = ok(g.apiApply(owner, { type: 'staff.create', name: '林輔導', role: '', classIds: [classId] })).result;
+  at('2026-10-31T19:00:00');
+  ok(g.apiApply(staff, { type: 'session.duty', classId, staffId: p.id, date: '2026-10-31' }));
+  at('2026-10-31T19:20:00');
+  assert.equal(g.autoRebuildReports(), 'idle');
+  at('2026-10-31T19:40:00');
+  assert.equal(g.autoRebuildReports(), 'rebuilt');
+  assert.equal(props.REPORT_CHECKED_AT, '2026-10-31T19:40');
+  assert.equal(g.addMinutes_('2026-10-31T23:50', 30), '2026-11-01T00:20', '跨日');
+});
+
 test('報表工作表：開頭像公式的文字以純文字寫入，數字不變', () => {
   const { g, owner, staff, classId, sheets } = setup();
   const stu = ok(g.apiApply(staff, { type: 'student.create', classId, teamId: null, name: '=HYPERLINK("x")' })).result;

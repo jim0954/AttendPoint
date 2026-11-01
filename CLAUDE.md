@@ -36,6 +36,7 @@
 - 6-3：服務人員在點名頁直接點名（`session.duty`，記入課次執勤 `dutyStaffIds`）。
 - 6-4：LOGO 由擁有者在「系統與備份」上傳，存在後台（`apiGetLogo`／`apiSetLogo`），不放進 repo。
 - 6-5：服務人員職務固定為點傳師、主壇務、副主壇務、護持壇務（`AttendStore.STAFF_ROLES`，後台也檢查）。6-6～6-10：外部審查（`REQUEST.md`，結果 `FINDINGS.md` 不進 repo）與修正，處理結果記在 `REQUEST.md` 的「已知問題」。6-10 加強登入安全（PIN 至少 6 位、失敗次數加鎖、改 PIN 後舊登入失效）並隱藏訪客看到的自行輸入事由。
+- 6-16：下課後自動更新報表（`autoRebuildReports`，觸發條件每 10 分鐘檢查，課次結束時間或最後活動時間＋30 分鐘後重建）。
 - 6-12 提示訊息合併；6-13、6-14 服務人員各班護持堂數、每堂學員與服務人員的出席率與名單（`AttendStore.computeSessionAttendance`，網頁課次列表與「課次」報表工作表）。
 - 6-15：自動更新後台（GitHub Actions 以 Apps Script API 上傳、建立版本、更新現有部署作業；Secret 未設定時略過）。
   - 還沒設定 Secret 時，雲端工作階段也能直接更新後台：給使用者 clasp 的 OAuth 授權網址（`redirect_uri=http://localhost:8888`，權限只要 `script.projects`、`script.deployments`），使用者按「允許」後貼回 `localhost:8888/?code=…` 的網址，換成 refresh token 存在暫存區（不可進 repo），再以 `CLASPRC_JSON`／`GAS_SCRIPT_ID`／`GAS_DEPLOYMENT_ID`（部署作業 ID 就在 `src/config.js` 的網址裡）環境變數執行 `node scripts/deploy-gas.js`。雲端環境連不到 `script.google.com`，最後的網址確認會出現警告，改用 API 查部署作業的版本確認。指令碼 ID 請使用者提供，不寫進 repo。

@@ -12,6 +12,7 @@
  *   USERS…          壇務帳號（USERS、USERS_2…、USERS_PARTS，由系統自動維護，請勿手動修改）
  *   DATA_SHEET      目前使用中的資料工作表（由系統自動維護，請勿手動修改）
  *   BACKUP_KEEP     自動保留的備份份數（選填，預設 10；跨年度結算的備份一律保留，不計入）
+ *   REPORT_CHECKED_AT  下課後自動更新報表的上次檢查時間（由系統自動維護）
  *
  * 所有 api* 函式都回傳 { ok: true, ... } 或 { ok: false, code, message }，不會丟出例外。
  */
@@ -567,6 +568,51 @@ function writeTable_(name, header, rows) {
   });
   sheet.getRange(1, 1, values.length, header.length).setValues(values);
   sheet.setFrozenRows(1);
+}
+
+// ---------- 下課後自動更新報表 ----------
+// 在 Apps Script「觸發條件」設定 autoRebuildReports 每 10 分鐘執行（見 docs/deploy-gas.md 第 7 節）。
+// 每次只檢查：有課次「結束時間＋30 分鐘」在上次檢查之後到了，才重建報表；沒有就不動試算表。
+// 課次沒有填結束時間時，以這堂課最後一次點名、加分或服務人員點名的時間＋30 分鐘代替。
+
+const REPORT_DELAY_MIN = 30;
+const REPORT_CHECKED_AT = 'REPORT_CHECKED_AT';
+
+/** 'yyyy-MM-ddTHH:mm[:ss]'（當地時間）加幾分鐘，回傳 'yyyy-MM-ddTHH:mm' */
+function addMinutes_(local, minutes) {
+  const d = new Date(local.slice(0, 16) + ':00Z');
+  d.setUTCMinutes(d.getUTCMinutes() + minutes);
+  return d.toISOString().slice(0, 16);
+}
+
+/** 課次的報表更新時間：結束時間＋30 分鐘；沒有結束時間就用最後活動時間＋30 分鐘；都沒有則為 null */
+function reportDueAt_(session, lastActivity) {
+  if (session.end) return addMinutes_(session.date + 'T' + session.end, REPORT_DELAY_MIN);
+  return lastActivity ? addMinutes_(lastActivity, REPORT_DELAY_MIN) : null;
+}
+
+/** 觸發條件呼叫：到了就重建報表，回傳 'rebuilt' 或 'idle' */
+function autoRebuildReports() {
+  const props = props_();
+  const now = nowIso_().slice(0, 16);
+  const last = props.getProperty(REPORT_CHECKED_AT);
+  let due = !last; // 第一次執行先更新一次
+  if (!due) {
+    const state = readState_();
+    const activity = {};
+    state.logs.forEach(function (l) {
+      if (l.sessionId && !(activity[l.sessionId] >= l.at)) activity[l.sessionId] = l.at;
+    });
+    due = state.sessions.some(function (s) {
+      if (s.deletedAt) return false;
+      const lastActivity = [activity[s.id], s.updatedAt].filter(Boolean).sort().pop();
+      const at = reportDueAt_(s, lastActivity);
+      return !!at && at > last && at <= now;
+    });
+  }
+  if (due) rebuildReportSheets();
+  props.setProperty(REPORT_CHECKED_AT, now); // 重建失敗時不會記錄，下次再試
+  return due ? 'rebuilt' : 'idle';
 }
 
 /**
