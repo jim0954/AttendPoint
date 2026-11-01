@@ -541,7 +541,10 @@
           touch(s, ctx);
         });
       } else if (p.deleteStudents) {
-        members.forEach(function (s) { s.deletedAt = ctx.now(); });
+        members.forEach(function (s) {
+          s.deletedAt = ctx.now();
+          leaveClass(s, today(ctx));
+        });
       } else {
         fail('CLASS_HAS_STUDENTS', `「${cls.name}」還有 ${members.length} 位學員，請選擇轉班或一併刪除`);
       }
@@ -729,6 +732,19 @@
     student.classId = classId;
   }
 
+  /** 目前這個班的入班日期（改版前沒有紀錄的學員為空字串） */
+  function joinDateOf(student) {
+    const list = Array.isArray(student.enrollments) ? student.enrollments : [];
+    const last = list[list.length - 1];
+    return last && last.classId === student.classId ? last.from : '';
+  }
+
+  /** 學員移到回收區：結束目前的入班紀錄（還原時再從當天開始，刪除期間的課不算應到） */
+  function leaveClass(student, day) {
+    if (!Array.isArray(student.enrollments)) student.enrollments = [{ classId: student.classId, from: '', to: null }];
+    student.enrollments.forEach(function (e) { if (!e.to) e.to = day; });
+  }
+
   /** 學員在 day 那天是否在 classId 班上（回收區的學員從刪除那天起不算） */
   function enrolledOn(student, classId, day) {
     if (student.deletedAt && student.deletedAt.slice(0, 10) <= day) return false;
@@ -794,6 +810,7 @@
   OPS['student.delete'] = function (state, p, ctx) {
     const student = mustFind(state.students, p.id, '學員');
     student.deletedAt = ctx.now();
+    leaveClass(student, today(ctx));
     return { id: student.id };
   };
 
@@ -802,6 +819,9 @@
     const cls = findById(state.classes, student.classId);
     if (!cls || cls.deletedAt) fail('CLASS_DELETED', '這位學員原本的班別已刪除，請先還原班別');
     student.deletedAt = null;
+    if (Array.isArray(student.enrollments) && !student.enrollments.some(function (e) { return !e.to; })) {
+      student.enrollments.push({ classId: student.classId, from: today(ctx), to: null });
+    }
     touch(student, ctx);
     return { id: student.id };
   };
@@ -810,12 +830,14 @@
    * 批次匯入名冊（CSV、Excel、LINE 貼上）。
    *   rows: [{ className?, teamName?, name, id?, note? }]
    *   defaultClassId: 沒寫班別或對不到時使用
+   *   joinDate: 新學員的入班日期（預設當天；學期中途才匯入名冊時填開學日）
    * 同班同名（或同學號）的學員視為已存在，只更新小隊與備註；不存在的小隊會自動新增。
    */
   OPS['student.import'] = function (state, p, ctx) {
     if (!Array.isArray(p.rows) || p.rows.length === 0) fail('INVALID_INPUT', '沒有可匯入的資料');
     if (p.rows.length > 500) fail('INVALID_INPUT', '一次最多匯入 500 筆');
     const fallback = p.defaultClassId ? mustFind(state.classes, p.defaultClassId, '班別') : null;
+    const joinDate = p.joinDate ? date(p.joinDate, '入班日期') : today(ctx);
     const result = { added: 0, updated: 0, skipped: [] };
 
     function resolveClass(name) {
@@ -872,7 +894,7 @@
         teamId: team ? team.id : null,
         name: name,
         note: note,
-        enrollments: [{ classId: cls.id, from: today(ctx), to: null }],
+        enrollments: [{ classId: cls.id, from: joinDate, to: null }],
         createdAt: ctx.now(),
         updatedAt: ctx.now(),
         deletedAt: null
@@ -1107,7 +1129,10 @@
     const handler = OPS[op.type];
     if (!handler) fail('INVALID_OP', `不支援的操作：${op.type}`);
     ctx = makeCtx(ctx);
-    const draft = clone(state);
+    // 流水帳紀錄建立後不再修改（撤銷是另外新增一筆、跨年度結算是整個清空），
+    // 所以只複製陣列、共用舊紀錄物件；其他資料表整份複製。流水帳佔資料的大部分，這樣每次操作快很多。
+    const draft = clone(Object.assign({}, state, { logs: [] }));
+    draft.logs = state.logs.slice();
     const payload = Object.assign({}, op);
     delete payload.type;
     const result = handler(draft, payload, ctx);
@@ -1148,6 +1173,7 @@
     computeStaffDutyByClass: computeStaffDutyByClass,
     computeSessionAttendance: computeSessionAttendance,
     enrolledOn: enrolledOn,
+    joinDateOf: joinDateOf,
     rateText: rateText,
     isCheckedIn: isCheckedIn,
     findSession: findSession,

@@ -311,10 +311,49 @@ test('每堂應到人數依當天名冊：入班日期、換班、刪除、開�
   run({ type: 'student.update', id: legacy, patch: { classId: B } });
   assert.deepEqual(state.students.find((x) => x.id === legacy).enrollments[0], { classId: A, from: '', to: '2026-10-16' });
   assert.equal(Store.enrolledOn(state.students.find((x) => x.id === legacy), A, '2026-10-03'), true);
+  // 刪除後還原：刪除期間的課不算應到，還原當天起重新算
+  now = '2026-10-20T09:00:00';
+  const back = run({ type: 'student.create', classId: B, name: '請假生', joinDate: '2026-10-01' }).id;
+  run({ type: 'student.delete', id: back });
+  now = '2026-10-27T09:00:00';
+  run({ type: 'student.restore', id: back });
+  const stu = () => state.students.find((x) => x.id === back);
+  assert.deepEqual(stu().enrollments.map((e) => [e.from, e.to]), [['2026-10-01', '2026-10-20'], ['2026-10-27', null]]);
+  assert.deepEqual(['2026-10-17', '2026-10-24', '2026-10-27'].map((d) => Store.enrolledOn(stu(), B, d)), [true, false, true]);
+  assert.equal(Store.joinDateOf(stu()), '2026-10-27');
+  // 匯入名冊可指定新學員的入班日期（已在名冊上的不受影響）
+  run({ type: 'student.import', defaultClassId: B, joinDate: '2026-09-15', rows: [{ name: '匯入生' }, { name: '請假生' }] });
+  assert.equal(Store.joinDateOf(state.students.find((x) => x.name === '匯入生')), '2026-09-15');
+  assert.equal(Store.joinDateOf(stu()), '2026-10-27');
+  assert.throws(() => run({ type: 'student.import', defaultClassId: B, joinDate: '9/15', rows: [{ name: '甲' }] }), (e) => e.code === 'INVALID_INPUT');
+  assert.equal(Store.joinDateOf({ classId: A }), '', '改版前的學員沒有入班日期');
+
   // 刪除班別時轉班也記下入班紀錄
   const c = run({ type: 'student.create', classId: A, name: '轉出生' }).id;
   run({ type: 'class.delete', id: A, moveStudentsTo: { classId: B } });
   assert.equal(state.students.find((x) => x.id === c).enrollments.length, 2);
+});
+
+test('操作不會修改既有的流水帳紀錄（apply 共用舊紀錄物件，不整份複製）', () => {
+  const t = setup();
+  t.run({ type: 'points.checkin', studentId: t.a, sessionId: t.sessionId });
+  const award = t.run({ type: 'points.award', studentId: t.a, sessionId: t.sessionId, points: 5, reason: '幫忙' });
+  t.run({ type: 'points.award', studentId: t.b, sessionId: t.sessionId, points: 30, reason: '整理' });
+  // 凍結現有紀錄：之後任何操作若修改它們就會丟出錯誤（store.js 為嚴格模式）
+  t.state.logs.forEach((l) => Object.freeze(l));
+  const before = JSON.stringify(t.state.logs);
+  const old = t.state;
+  t.run({ type: 'points.award', studentId: t.a, sessionId: t.sessionId, points: 5, reason: '背經' });
+  t.run({ type: 'points.batch', classId: t.classId, sessionId: t.sessionId, points: 2, reason: '秩序', target: { all: true } });
+  t.run({ type: 'points.redeem', studentId: t.b, giftId: t.giftId, sessionId: t.sessionId });
+  t.run({ type: 'points.adjust', studentId: t.a, honorDelta: 1, reason: '補登' });
+  t.run({ type: 'log.reverse', logId: award.logId });
+  t.run({ type: 'student.delete', id: t.b });
+  t.run({ type: 'student.restore', id: t.b });
+  assert.equal(JSON.stringify(old.logs), before, '原本的資料不變');
+  assert.ok(t.state.logs.length > old.logs.length);
+  t.run({ type: 'year.reset', yearLabel: '2027 年度' });
+  assert.equal(JSON.stringify(old.logs), before);
 });
 
 test('跨年度結算：清空紀錄與課次、永久清除回收區、保留名冊', () => {
