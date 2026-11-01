@@ -27,19 +27,20 @@
 
 ## 審查範圍
 
-- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-10 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
+- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-16 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
+- **這次特別注意上次審查（`699a366`）之後的修改**：`git diff 699a366 -- src scripts .github` 約 +490／−50 行，內容見下方「參考：近期修改」的階段 6-10～6-16。
 - **排除**：根目錄 `AttendPoint.html`（舊版 v2，只當移轉測試資料）、`dist/`（建置產物，不在 repo 裡）。
-- 主要檔案（總共約 8,700 行，含測試與腳本）：
+- 主要檔案（總共約 9,600 行，含測試與腳本）：
 
 | 區塊 | 檔案 | 內容 |
 |---|---|---|
-| 資料層 | `src/store.js`（1064 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次 |
-| 權限 | `src/auth.js`（324 行） | `authorize`（擁有者限定的操作、壇務只能撤銷自己今天的紀錄、壇務不能移除小隊與規則）、`viewFor`（訪客遮蔽）、`syncView`／`mergeView`（增量同步）、PIN 雜湊、帳號操作 |
+| 資料層 | `src/store.js`（1118 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次；`computeSessionAttendance`（每堂出席、缺席、應到人數）、`computeStaffDutyByClass` |
+| 權限 | `src/auth.js`（342 行） | `authorize`（擁有者限定的操作、壇務只能撤銷自己今天的紀錄、壇務不能移除小隊與規則）、`viewFor`（訪客遮蔽，含 `guestReason` 隱藏自行輸入的事由）、`syncView`／`mergeView`（增量同步）、PIN 雜湊、帳號操作 |
 | 移轉 | `src/migrate-v2.js`（367 行） | v2 資料轉換、`loadAny()` |
-| 後台 | `src/Code.js`（574 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長）、錯誤 5 次鎖定、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
-| 介面 | `src/ui/*.js` | `backend.js`（雲端 fetch／單機 localStorage、增量合併）、`app.js`（樂觀更新佇列、外框、LOGO）、`lib.js`（`App.html` 自動跳脫樣板）、各分頁 `view-*.js` |
+| 後台 | `src/Code.js`（693 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長，記下 PIN 指紋）、錯誤 5 次鎖定（鎖內先記次數）、`apiApplyBatch` 合併送出、`autoRebuildReports` 下課後自動更新報表（觸發條件）、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
+| 介面 | `src/ui/*.js` | `backend.js`（雲端 fetch／單機 localStorage、增量合併）、`app.js`（樂觀更新佇列與合併送出、關閉前提醒、外框、LOGO）、`lib.js`（`App.html` 自動跳脫樣板、提示訊息合併）、各分頁 `view-*.js` |
 | 設定 | `src/config.js` | 後台網址 `GAS_URL`（公開，不是秘密） |
-| 建置與發布 | `scripts/build.js`、`.github/workflows/pages.yml` | 產生單機版、Pages 網頁、後台；後台版本指紋寫進兩邊，網頁比對不同時提示更新後台 |
+| 建置與發布 | `scripts/build.js`、`scripts/deploy-gas.js`（160 行）、`.github/workflows/pages.yml` | 產生單機版、Pages 網頁、後台；後台版本指紋寫進兩邊，網頁比對不同時提示更新後台；`deploy-gas.js` 以 Apps Script API 上傳後台、建立版本、更新現有部署作業（授權來自 Secret `CLASPRC_JSON` 的 refresh token） |
 | 模擬與量測 | `scripts/gas-mock.js`、`scripts/gas-sim.js`、`scripts/stress.js` | Node／瀏覽器模擬 Apps Script；壓力測試 |
 | 測試 | `tests/*.test.js`、`tests/e2e/*.e2e.js` | 單元測試（node:test）、瀏覽器測試（Playwright） |
 
@@ -77,9 +78,9 @@ npm run e2e
 
 ## 已驗證事項（請仍獨立判斷）
 
-- **自動測試（2026-10-30）**
-  - `npm test`：83 項全過（資料層、權限、增量同步、v2 移轉、後台在 Node 模擬環境的完整流程、寫入失敗、資料工作表遺失或損壞、備份清理、`doPost` 白名單、LOGO、建置設定）。
-  - `npm run e2e`：28 項全過，分單機版與模擬雲端版兩組。內容包括：建班、名冊、點名、加減分、兌換、撤銷、重新開啟、名字含 HTML、訪客遮蔽、壇務權限、多裝置增量同步、寫入失敗退回、登入逾時、後台版本提示、存取權錯誤提示、服務人員點名、LOGO 上傳、職務選單、舊職務保留、連續操作合併送出、關閉前提醒。
+- **自動測試（2026-11-01）**
+  - `npm test`：91 項全過（資料層、權限、增量同步、v2 移轉、後台在 Node 模擬環境的完整流程、寫入失敗、資料工作表遺失或損壞、備份清理、`doPost` 白名單、LOGO、建置設定、登入次數與 PIN 指紋、合併送出、每堂出席、下課後自動更新報表、`deploy-gas.js` 的請求流程）。
+  - `npm run e2e`：30 項全過，分單機版與模擬雲端版兩組。內容包括：建班、名冊、點名、加減分、兌換、撤銷、重新開啟、名字含 HTML、訪客遮蔽、壇務權限、多裝置增量同步、寫入失敗退回、登入逾時、後台版本提示、存取權錯誤提示、服務人員點名、LOGO 上傳、職務選單、舊職務保留、連續操作合併送出、關閉前提醒、提示訊息合併、各班護持堂數、每堂出席率與名單。
   - GitHub Actions「發布網頁」每次推送都會跑 `npm test` 並發布。
 - **壓力測試**（Node、記憶體模擬試算表，見 `docs/stress-test.md`）
   - 中型規模（3 班 × 50 人、一年）約 4.3 MB。
@@ -113,6 +114,7 @@ npm run e2e
 
 ### 必須逐項給出結論
 
+0. **上次之後新增的攻擊面**：`apiApplyBatch`（每個操作是否都各自經過 `authorize`、一次 30 個操作的資源消耗）、`apiLogin` 改為在 `LockService` 鎖內計數（未登入的請求能否藉此佔住寫入用的鎖，讓點名出現「使用人數較多」）、`autoRebuildReports`（觸發條件以部署者身分執行）。
 1. **身分驗證與暴力破解**（`src/Code.js` 的 `apiLogin`、`checkPin_`、`userFromToken_`；`src/auth.js` 的 `hashPin`、`verifyPin`、`PIN_RE`）
    - PIN 只有 4–8 位數字。錯誤 5 次鎖定 15 分鐘的計數存在 CacheService，而且是「讀取 → 比對 PIN → 寫回」，中間沒有加鎖。**並行送出大量登入請求能不能繞過次數限制？** 照這樣算，猜中 4 位數或 6 位數 PIN 需要多久？
    - 對所有帳號輪流猜（`apiLoginOptions` 會公開帳號清單）、CacheService 提早清除計數，這兩種情況的影響。
@@ -135,12 +137,22 @@ npm run e2e
    - 不用登入就能呼叫的 API（`apiLoginOptions`、`apiLogin`、`apiGetState`、`apiGetLogo`）被大量呼叫時，Apps Script 的配額、並行上限、試算表讀取，會不會讓佛堂當天無法點名。
    - 已登入的壇務能否用超大 op（例如上萬筆 `student.import`、很長的文字）讓資料變得過大而無法讀寫。
 6. **供應鏈與發布**
+   - `scripts/deploy-gas.js` 與 Secret `CLASPRC_JSON`：refresh token 的權限範圍（`script.projects`、`script.deployments`，等於能改這個 Google 帳號的所有 Apps Script 專案）、在 Actions 中只傳給「更新後台」這一步、記錄中會不會印出授權資訊、失敗時的行為。
    - `.github/workflows/pages.yml` 的權限、使用的 actions 是否固定版本。
    - 公開 repo 中有沒有不該公開的內容（PIN、`.clasp.json`、試算表 ID、真實姓名、組織圖檔）。
 
-## 已知問題（前四次審查找到，請確認或補充）
+## 已知問題（前五次審查找到，請確認或補充）
 
 第一次審查只看了階段 6-5（職務下拉選單），找到 5 項，都已在階段 6-7、6-8 處理。第二次是全 repo 審查（基準 `0f8c508`），找到 16 項，以下依那次的編號列出。第三次是 Claude 的安全性複查，找到 A–C 三項；第四次 Gemini 的安全性審查確認了 A–C，另有幾項低風險發現。
+
+**第五次審查（Claude，基準 `92a8cbd`，針對階段 6-10～6-16）找到，尚未修正：**
+
+- D（中，確定）`scripts/deploy-gas.js` 用開啟後台網址（`doGet`）讀目前版本，讀不到就當成「需要更新」。Claude 的雲端環境連不到 `script.google.com`，每次執行都會建立新版本；Actions 遇到網路暫時錯誤也一樣。Apps Script 每個專案最多 200 個版本。建議改用 Apps Script API 讀現有部署作業所指版本的 `Code` 內容來比對指紋。
+- E（中，確定）`autoRebuildReports` 每 10 分鐘就讀一次整份資料（一天 144 次），實測一次約 4 秒，資料越大越慢；個人帳號的觸發條件每天總執行時間有上限（請確認目前數字）。建議記下「資料版本」與「下一堂到期時間」，資料沒變且還沒到期時不讀試算表。
+- F（低，確定）`apiLogin` 為了計數改在 `LockService.getScriptLock()` 內執行，與寫入資料共用同一把鎖。大量未登入的登入請求會與點名搶鎖，最壞情況壇務會看到「目前使用人數較多」。這個專案綁在試算表上，可改用 `getDocumentLock()` 讓登入計數與寫入分開。
+- G（低，確定）`CLASPRC_JSON` 的 refresh token 能修改這個 Google 帳號所有的 Apps Script 專案（例如同帳號的其他專案）。目前只存在 GitHub Secret 與 Claude 雲端環境的暫存區；轉移到公用帳號時應改用公用帳號重新授權。
+- H（低，確定）`computeSessionAttendance` 的應到學員是「目前」在這個班的學員：學員換班後，新班別在他加入前的課次會把他算成缺席；學期中加入的學員也一樣。
+- I（建議）`.github/workflows/pages.yml` 的 actions 以主版本標籤（`@v4`）引用，沒有固定到 commit SHA。
 
 **第三次（Claude，基準 `e134950`）與第四次（Gemini，基準 `699a366`）審查都找到，已在階段 6-10 修正（請確認修正是否正確）：**
 
@@ -208,10 +220,20 @@ npm run e2e
    - `src/config.js` 被改錯時的行為。
 8. **測試本身**（較低優先）：有沒有測試其實沒驗證到它聲稱的事（例如等待條件太寬、比對用部分字串）。
 
+9. **出席統計與自動報表**（`AttendStore.computeSessionAttendance`、`computeStaffDutyByClass`、`Code.js` 的 `rebuildReportSheets`、`autoRebuildReports`、`reportDueAt_`）
+   - 出席、缺席、應到人數在刪除學員、換班、撤銷報到、跨班支援的服務人員時是否正確，出席率會不會超過 100%。
+   - 自動更新的時間判斷：跨日、沒有結束時間的課次、課後才修改的課次、觸發條件漏跑一次或重建失敗時，會不會漏更新或重複更新。
+   - 網頁課次列表與報表工作表是否用同一套計算、結果一致。
+
 ## 參考：近期修改（最新在上）
 
 | commit | 內容 |
 |---|---|
+| 階段 6-16 | 下課後半小時自動更新報表（`autoRebuildReports`，觸發條件每 10 分鐘） |
+| 階段 6-15 | 自動更新後台（`scripts/deploy-gas.js`、Actions 的「更新後台」步驟） |
+| 階段 6-14 | 每堂學員與服務人員的出席率與名單、報表加各班護持堂數 |
+| 階段 6-13 | 服務人員名單顯示各班護持堂數 |
+| 階段 6-12 | 提示訊息合併（相同的顯示「×N」，最多 3 則） |
 | 階段 6-11 | 連續操作合併送出（`apiApplyBatch`）、還沒同步完成時關閉網頁先提醒 |
 | 階段 6-10 | 修正第三、四次審查的 A–C（登入安全、訪客事由） |
 | 階段 6-9 | REQUEST.md 加入安全性審查（必做） |
