@@ -8,9 +8,10 @@
  *   GAS_DEPLOYMENT_ID  現有網頁應用程式部署作業的 ID（AKfyc 開頭），更新後網址不變
  * 沒有設定時直接略過（照舊手動更新後台）。
  *
- * 流程：開啟後台網址比對版本指紋，相同就不動（Apps Script 每個專案最多 200 個版本，
- * 只在後台程式真的改變時才建立新版本）；不同時以 Apps Script API 上傳 dist/gas/、
- * 建立新版本、把現有部署作業指到新版本，最後再開一次網址確認。
+ * 流程：以 Apps Script API 讀現有部署作業所指版本的 Code 內容，比對版本指紋，相同就不動
+ * （Apps Script 每個專案最多 200 個版本，只在後台程式真的改變時才建立新版本）；不同時上傳
+ * dist/gas/、建立新版本、把現有部署作業指到新版本，最後再讀一次部署作業確認。
+ * 全程只用 script.googleapis.com，不需要開啟後台網址（script.google.com）。
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -56,21 +57,15 @@ function builtVersion(gasDir) {
   return m[1];
 }
 
-function gasUrl(configFile) {
-  const m = fs.readFileSync(configFile, 'utf8').match(/GAS_URL:\s*'([^']*)'/);
-  return m ? m[1] : '';
-}
-
-/** 開啟後台網址（doGet）讀出目前的版本指紋；讀不到時回傳 null */
-async function liveVersion(url, fetch) {
-  if (!url) return null;
-  try {
-    const res = await fetch(url, { redirect: 'follow' });
-    const m = (await res.text()).match(/版本 ([0-9a-f]{12})/);
-    return m ? m[1] : null;
-  } catch (e) {
-    return null;
-  }
+/** 現有部署作業目前指到的版本號碼與其後台版本指紋（版本裡沒有指紋時為 null） */
+async function deployedVersion(fetch, token, scriptId, deploymentId) {
+  const d = await call(fetch, 'GET', API + scriptId + '/deployments/' + deploymentId, token);
+  const number = d.deploymentConfig && d.deploymentConfig.versionNumber;
+  if (!number) return { number: null, version: null };
+  const content = await call(fetch, 'GET', API + scriptId + '/content?versionNumber=' + number, token);
+  const code = (content.files || []).find((f) => f.name === 'Code');
+  const m = code && code.source.match(/const BACKEND_VERSION = '([0-9a-f]+)'/);
+  return { number, version: m ? m[1] : null };
 }
 
 async function call(fetch, method, url, token, body) {
@@ -91,13 +86,12 @@ async function call(fetch, method, url, token, body) {
 
 /**
  * 回傳 'skipped'（沒有設定）、'unchanged'（後台已是最新）或 'deployed'。
- * opts: { env, fetch, gasDir, configFile, log, wait }
+ * opts: { env, fetch, gasDir, log }
  */
 async function deploy(opts) {
   const env = opts.env;
   const fetch = opts.fetch;
   const log = opts.log || console.log;
-  const wait = opts.wait || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const missing = ['CLASPRC_JSON', 'GAS_SCRIPT_ID', 'GAS_DEPLOYMENT_ID'].filter((k) => !env[k]);
   if (missing.length) {
     log(`略過自動更新後台：沒有設定 ${missing.join('、')}（請手動更新 Apps Script，見 docs/deploy-gas.md）`);
@@ -106,14 +100,6 @@ async function deploy(opts) {
   const scriptId = env.GAS_SCRIPT_ID.trim();
   const deploymentId = env.GAS_DEPLOYMENT_ID.trim();
   const version = builtVersion(opts.gasDir);
-  const url = gasUrl(opts.configFile);
-  const live = await liveVersion(url, fetch);
-  if (live === version) {
-    log(`後台已是最新版本（${version}），不需要更新`);
-    return 'unchanged';
-  }
-  log(`更新後台：${live || '（讀不到目前版本）'} → ${version}`);
-
   const c = credentials(env.CLASPRC_JSON);
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -126,22 +112,21 @@ async function deploy(opts) {
   }
   const token = tokenJson.access_token;
 
+  const live = await deployedVersion(fetch, token, scriptId, deploymentId);
+  if (live.version === version) {
+    log(`後台已是最新版本（第 ${live.number} 版，${version}），不需要更新`);
+    return 'unchanged';
+  }
+  log(`更新後台：${live.version || '（目前版本沒有指紋）'} → ${version}`);
+
   await call(fetch, 'PUT', API + scriptId + '/content', token, { files: projectFiles(opts.gasDir) });
   const ver = await call(fetch, 'POST', API + scriptId + '/versions', token, { description: '自動部署 ' + version });
   await call(fetch, 'PUT', API + scriptId + '/deployments/' + deploymentId, token, {
     deploymentConfig: { scriptId, versionNumber: ver.versionNumber, manifestFileName: 'appsscript', description: '自動部署 ' + version }
   });
-  log(`已上傳並發布第 ${ver.versionNumber} 版`);
-
-  // 確認網址已經換成新版本（Google 偶爾要幾秒才生效）
-  for (let i = 0; url && i < 5; i++) {
-    if (await liveVersion(url, fetch) === version) {
-      log(`✓ 後台網址已是新版本（${version}）`);
-      return 'deployed';
-    }
-    await wait(3000);
-  }
-  if (url) log(`⚠️ 已發布，但後台網址還沒回報新版本（${version}），請稍後開啟網頁確認`);
+  const after = await deployedVersion(fetch, token, scriptId, deploymentId);
+  if (after.version !== version) throw new Error(`已建立第 ${ver.versionNumber} 版，但部署作業目前是第 ${after.number} 版（${after.version}），請到 Apps Script 的「管理部署作業」確認`);
+  log(`✓ 已發布第 ${ver.versionNumber} 版（${version}），後台網址不變`);
   return 'deployed';
 }
 
@@ -151,8 +136,7 @@ if (require.main === module) {
   deploy({
     env: process.env,
     fetch: globalThis.fetch,
-    gasDir: path.join(ROOT, 'dist', 'gas'),
-    configFile: path.join(ROOT, 'src', 'config.js')
+    gasDir: path.join(ROOT, 'dist', 'gas')
   }).catch((e) => {
     console.error('✗ 自動更新後台失敗：' + e.message);
     process.exit(1);

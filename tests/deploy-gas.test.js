@@ -17,29 +17,35 @@ function fixture(version) {
   fs.writeFileSync(path.join(gas, 'appsscript.json'), '{"timeZone":"Asia/Taipei"}');
   ['store.js', 'auth.js', 'migrate-v2.js'].forEach((f) => fs.writeFileSync(path.join(gas, f), '// ' + f));
   fs.writeFileSync(path.join(gas, 'Code.js'), `const BACKEND_VERSION = '${version}';`);
-  const configFile = path.join(dir, 'config.js');
-  fs.writeFileSync(configFile, "window.ATTENDPOINT_CONFIG = { GAS_URL: 'https://script.google.com/macros/s/X/exec' };");
-  return { gasDir: gas, configFile };
+  return { gasDir: gas };
 }
 
-/** 假的 Google：記錄請求；doGet 回報 live 版本，部署後改成新版本 */
+/** 假的 Apps Script API：記錄請求；部署作業目前指到第 6 版（指紋 live），更新後指到新版本 */
 function fakeGoogle(live, opts = {}) {
   const calls = [];
-  const state = { live };
-  const reply = (status, body) => ({ ok: status < 300, status, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)), json: async () => body });
+  const versions = { 6: live };
+  let deployed = 6;
+  let uploaded = null;
+  const reply = (status, body) => ({ ok: status < 300, status, text: async () => JSON.stringify(body), json: async () => body });
   const fetch = async (url, init = {}) => {
     calls.push({ url, method: init.method || 'GET', body: init.body });
-    if (url.includes('/macros/s/')) return reply(200, `AttendPoint 後台運作中（版本 ${state.live}）。`);
     if (url.includes('oauth2')) return opts.badToken ? reply(400, { error: 'invalid_grant' }) : reply(200, { access_token: 'TOKEN' });
-    if (url.endsWith('/content')) return opts.apiOff ? reply(403, { error: { message: 'User has not enabled the Apps Script API.' } }) : reply(200, {});
-    if (url.endsWith('/versions')) return reply(200, { versionNumber: 7 });
-    if (url.includes('/deployments/')) { state.live = opts.newVersion; return reply(200, {}); }
+    if (opts.apiOff) return reply(403, { error: { message: 'User has not enabled the Apps Script API.' } });
+    if (url.endsWith('/deployments/AKfycDEPLOY')) {
+      if (init.method === 'PUT') { if (!opts.ignoreUpdate) deployed = JSON.parse(init.body).deploymentConfig.versionNumber; return reply(200, {}); }
+      return reply(200, { deploymentConfig: { versionNumber: deployed } });
+    }
+    const m = url.match(/content\?versionNumber=(\d+)$/);
+    if (m) return reply(200, { files: [{ name: 'Code', source: `const BACKEND_VERSION = '${versions[m[1]]}';` }] });
+    if (url.endsWith('/content')) { uploaded = JSON.parse(init.body).files.find((f) => f.name === 'Code').source.match(/'(\w+)'/)[1]; return reply(200, {}); }
+    if (url.endsWith('/versions')) { versions[7] = uploaded; return reply(200, { versionNumber: 7 }); }
     throw new Error('unexpected ' + url);
   };
   return { fetch, calls };
 }
 
-const quiet = { log() {}, wait: async () => {} };
+const quiet = { log() {} };
+const steps = (g) => g.calls.map((c) => c.method + ' ' + c.url.replace('https://script.googleapis.com/v1/projects/', ''));
 
 test('授權檔：clasp 2.x 與 3.x 格式都能讀出 OAuth 用戶端與 refresh token', () => {
   assert.deepEqual(credentials(V2), { clientId: 'c2', clientSecret: 's2', refreshToken: 'r2' });
@@ -55,36 +61,45 @@ test('上傳的檔案：manifest 加上四個後台檔案，依載入順序排�
   ]);
 });
 
-test('沒有設定 Secret 時略過；後台已是最新版本時不建立新版本', async () => {
+test('沒有設定 Secret 時略過；部署作業已是最新版本時不建立新版本（不需要開啟後台網址）', async () => {
   const f = fixture('aaaaaaaaaaaa');
   const g1 = fakeGoogle('aaaaaaaaaaaa');
   assert.equal(await deploy({ ...f, ...quiet, env: { GAS_SCRIPT_ID: 'x' }, fetch: g1.fetch }), 'skipped');
   assert.equal(g1.calls.length, 0);
   assert.equal(await deploy({ ...f, ...quiet, env: ENV, fetch: g1.fetch }), 'unchanged');
-  assert.deepEqual(g1.calls.map((c) => c.method + ' ' + c.url.split('/').slice(-1)[0]), ['GET exec']);
+  assert.deepEqual(steps(g1), ['POST https://oauth2.googleapis.com/token', 'GET SCRIPT/deployments/AKfycDEPLOY', 'GET SCRIPT/content?versionNumber=6']);
+  assert.equal(g1.calls.some((c) => c.url.includes('script.google.com')), false);
 });
 
-test('版本不同：上傳、建立版本、把現有部署作業指到新版本，再確認網址', async () => {
+test('版本不同：上傳、建立版本、把現有部署作業指到新版本，再讀部署作業確認', async () => {
   const f = fixture('bbbbbbbbbbbb');
-  const g = fakeGoogle('aaaaaaaaaaaa', { newVersion: 'bbbbbbbbbbbb' });
+  const g = fakeGoogle('aaaaaaaaaaaa');
   const logs = [];
-  assert.equal(await deploy({ ...f, wait: async () => {}, log: (m) => logs.push(m), env: ENV, fetch: g.fetch }), 'deployed');
-  const steps = g.calls.map((c) => c.method + ' ' + c.url.replace('https://script.googleapis.com/v1/projects/', ''));
-  assert.deepEqual(steps, [
-    'GET https://script.google.com/macros/s/X/exec',
+  assert.equal(await deploy({ ...f, log: (m) => logs.push(m), env: ENV, fetch: g.fetch }), 'deployed');
+  assert.deepEqual(steps(g), [
     'POST https://oauth2.googleapis.com/token',
+    'GET SCRIPT/deployments/AKfycDEPLOY',
+    'GET SCRIPT/content?versionNumber=6',
     'PUT SCRIPT/content',
     'POST SCRIPT/versions',
     'PUT SCRIPT/deployments/AKfycDEPLOY',
-    'GET https://script.google.com/macros/s/X/exec'
+    'GET SCRIPT/deployments/AKfycDEPLOY',
+    'GET SCRIPT/content?versionNumber=7'
   ]);
-  assert.match(g.calls[1].body, /refresh_token=r3/);
-  assert.equal(JSON.parse(g.calls[2].body).files.length, 5);
-  assert.deepEqual(JSON.parse(g.calls[4].body).deploymentConfig, {
+  assert.match(g.calls[0].body, /refresh_token=r3/);
+  assert.equal(JSON.parse(g.calls[3].body).files.length, 5);
+  assert.deepEqual(JSON.parse(g.calls[5].body).deploymentConfig, {
     scriptId: 'SCRIPT', versionNumber: 7, manifestFileName: 'appsscript', description: '自動部署 bbbbbbbbbbbb'
   });
-  assert.ok(logs.some((m) => m.includes('✓ 後台網址已是新版本')));
+  assert.ok(logs.some((m) => m.includes('✓ 已發布第 7 版')));
   assert.equal(logs.join('\n').includes('TOKEN'), false, '紀錄中不出現授權資訊');
+  // 再跑一次：已是最新，不再建立版本
+  assert.equal(await deploy({ ...f, ...quiet, env: ENV, fetch: g.fetch }), 'unchanged');
+});
+
+test('部署作業沒有換到新版本時失敗', async () => {
+  const f = fixture('bbbbbbbbbbbb');
+  await assert.rejects(deploy({ ...f, ...quiet, env: ENV, fetch: fakeGoogle('aaaaaaaaaaaa', { ignoreUpdate: true }).fetch }), /部署作業目前是第 6 版/);
 });
 
 test('授權失效或沒有開啟 Apps Script API 時，失敗並說明處理方式', async () => {
