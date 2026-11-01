@@ -26,6 +26,7 @@ function fakeGoogle(live, opts = {}) {
   const versions = { 6: live };
   let deployed = 6;
   let uploaded = null;
+  let lag = opts.lag || 0; // 更新部署作業後，前幾次讀取仍回傳舊版本
   const reply = (status, body) => ({ ok: status < 300, status, text: async () => JSON.stringify(body), json: async () => body });
   const fetch = async (url, init = {}) => {
     calls.push({ url, method: init.method || 'GET', body: init.body });
@@ -33,6 +34,7 @@ function fakeGoogle(live, opts = {}) {
     if (opts.apiOff) return reply(403, { error: { message: 'User has not enabled the Apps Script API.' } });
     if (url.endsWith('/deployments/AKfycDEPLOY')) {
       if (init.method === 'PUT') { if (!opts.ignoreUpdate) deployed = JSON.parse(init.body).deploymentConfig.versionNumber; return reply(200, {}); }
+      if (deployed !== 6 && lag > 0) { lag--; return reply(200, { deploymentConfig: { versionNumber: 6 } }); }
       return reply(200, { deploymentConfig: { versionNumber: deployed } });
     }
     const m = url.match(/content\?versionNumber=(\d+)$/);
@@ -44,7 +46,7 @@ function fakeGoogle(live, opts = {}) {
   return { fetch, calls };
 }
 
-const quiet = { log() {} };
+const quiet = { log() {}, wait: async () => {} };
 const steps = (g) => g.calls.map((c) => c.method + ' ' + c.url.replace('https://script.googleapis.com/v1/projects/', ''));
 
 test('授權檔：clasp 2.x 與 3.x 格式都能讀出 OAuth 用戶端與 refresh token', () => {
@@ -75,7 +77,7 @@ test('版本不同：上傳、建立版本、把現有部署作業指到新版�
   const f = fixture('bbbbbbbbbbbb');
   const g = fakeGoogle('aaaaaaaaaaaa');
   const logs = [];
-  assert.equal(await deploy({ ...f, log: (m) => logs.push(m), env: ENV, fetch: g.fetch }), 'deployed');
+  assert.equal(await deploy({ ...f, wait: async () => {}, log: (m) => logs.push(m), env: ENV, fetch: g.fetch }), 'deployed');
   assert.deepEqual(steps(g), [
     'POST https://oauth2.googleapis.com/token',
     'GET SCRIPT/deployments/AKfycDEPLOY',
@@ -95,6 +97,14 @@ test('版本不同：上傳、建立版本、把現有部署作業指到新版�
   assert.equal(logs.join('\n').includes('TOKEN'), false, '紀錄中不出現授權資訊');
   // 再跑一次：已是最新，不再建立版本
   assert.equal(await deploy({ ...f, ...quiet, env: ENV, fetch: g.fetch }), 'unchanged');
+});
+
+test('部署作業更新後 Google 晚幾秒才生效：多等幾次再確認', async () => {
+  const f = fixture('bbbbbbbbbbbb');
+  let waited = 0;
+  const g = fakeGoogle('aaaaaaaaaaaa', { lag: 2 });
+  assert.equal(await deploy({ ...f, log() {}, wait: async () => { waited++; }, env: ENV, fetch: g.fetch }), 'deployed');
+  assert.equal(waited, 2);
 });
 
 test('部署作業沒有換到新版本時失敗', async () => {

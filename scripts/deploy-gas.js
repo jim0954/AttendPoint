@@ -86,12 +86,13 @@ async function call(fetch, method, url, token, body) {
 
 /**
  * 回傳 'skipped'（沒有設定）、'unchanged'（後台已是最新）或 'deployed'。
- * opts: { env, fetch, gasDir, log }
+ * opts: { env, fetch, gasDir, log, wait }
  */
 async function deploy(opts) {
   const env = opts.env;
   const fetch = opts.fetch;
   const log = opts.log || console.log;
+  const wait = opts.wait || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const missing = ['CLASPRC_JSON', 'GAS_SCRIPT_ID', 'GAS_DEPLOYMENT_ID'].filter((k) => !env[k]);
   if (missing.length) {
     log(`略過自動更新後台：沒有設定 ${missing.join('、')}（請手動更新 Apps Script，見 docs/deploy-gas.md）`);
@@ -124,7 +125,13 @@ async function deploy(opts) {
   await call(fetch, 'PUT', API + scriptId + '/deployments/' + deploymentId, token, {
     deploymentConfig: { scriptId, versionNumber: ver.versionNumber, manifestFileName: 'appsscript', description: '自動部署 ' + version }
   });
-  const after = await deployedVersion(fetch, token, scriptId, deploymentId);
+  // Google 更新部署作業後，讀到的可能還是舊版本好幾秒，多等幾次再確認
+  let after = null;
+  for (let i = 0; i < 6; i++) {
+    after = await deployedVersion(fetch, token, scriptId, deploymentId);
+    if (after.version === version) break;
+    await wait(5000);
+  }
   if (after.version !== version) throw new Error(`已建立第 ${ver.versionNumber} 版，但部署作業目前是第 ${after.number} 版（${after.version}），請到 Apps Script 的「管理部署作業」確認`);
   log(`✓ 已發布第 ${ver.versionNumber} 版（${version}），後台網址不變`);
   return 'deployed';
