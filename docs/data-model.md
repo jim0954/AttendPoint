@@ -56,7 +56,7 @@ state
 
 `{ id, classId, teamId, name, note, enrollments[] }`。`teamId` 為 `null` 表示不分小隊。學號 `id` 建立後不可修改（流水帳以學號對應）。
 
-`enrollments[]` 是入班紀錄 `{ classId, from, to }`（日期；`to` 為離開那天、不含，`null` 表示仍在班上）。新增學員時從入班日期（預設當天）開始；換班（`student.update` 改 `classId`，或刪除班別時轉班）從當天起結束舊的、加入新的；`student.update` 的 `patch.joinDate` 修改目前這個班的入班日期。改版前建立的學員沒有這個欄位，視為一直在目前的班別。
+`enrollments[]` 是入班紀錄 `{ classId, from, to }`（日期；`to` 為離開那天、不含，`null` 表示仍在班上）。新增學員時從入班日期（預設當天）開始；換班（`student.update` 改 `classId`，或刪除班別時轉班）從當天起結束舊的、加入新的；`student.update` 的 `patch.joinDate` 修改目前這個班的入班日期；`student.import` 的 `joinDate` 指定新學員的入班日期；移到回收區時結束入班紀錄，還原時從當天重新開始（刪除期間的課不算應到）。改版前建立的學員沒有這個欄位，視為一直在目前的班別。
 
 ### 每堂出席（`computeSessionAttendance`）
 
