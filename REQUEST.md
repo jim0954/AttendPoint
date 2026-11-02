@@ -27,18 +27,18 @@
 
 ## 審查範圍
 
-- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-22 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
-- **這次特別注意最近兩輪的修改**：上次外部審查（`699a366`）之後的階段 6-10～6-19，其中 6-18、6-19 是上一份審查請求（`a7877e6`）之後才加的（`git diff a7877e6 -- src scripts .github` 約 +170／−80 行）：自動更新後台改用 API 比對版本、自動報表省略讀取（`DATA_VERSION`／`REPORT_PLAN`）、登入計數改用文件鎖、actions 固定 SHA、每堂應到人數依當天名冊（學員入班紀錄 `enrollments`、服務人員開始服務日期 `joinDate`）。
+- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-23 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
+- **這次特別注意上次外部審查（`0ea233a`）之後的修改**（`git diff 0ea233a -- src scripts .github` 約 +190／−50 行）：階段 6-21 `AttendStore.apply` 改為只複製流水帳陣列、共用既有紀錄物件；刪除與還原學員記入入班紀錄；匯入名冊的入班日期；報表與 CSV 的入班日期、開始服務日期；`DATA_SHEET` 與 `DATA_VERSION` 一次寫入。階段 6-22 表單送出時按鈕停用到後台回應（`App.busyUntil`、`App.onSubmit`、`App.run`），登入對話框的帳號清單快取。
 - **排除**：根目錄 `AttendPoint.html`（舊版 v2，只當移轉測試資料）、`dist/`（建置產物，不在 repo 裡）。
-- 主要檔案（總共約 9,800 行，含測試與腳本）：
+- 主要檔案（總共約 10,100 行，含測試與腳本）：
 
 | 區塊 | 檔案 | 內容 |
 |---|---|---|
-| 資料層 | `src/store.js`（1162 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次；`computeSessionAttendance`（每堂出席、缺席、依當天名冊的應到人數）、入班紀錄 `enrollments`（`moveClass`、`enrolledOn`）、`computeStaffDutyByClass` |
+| 資料層 | `src/store.js`（1191 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次；`computeSessionAttendance`（每堂出席、缺席、依當天名冊的應到人數）、入班紀錄 `enrollments`（`moveClass`、`enrolledOn`）、`computeStaffDutyByClass` |
 | 權限 | `src/auth.js`（342 行） | `authorize`（擁有者限定的操作、壇務只能撤銷自己今天的紀錄、壇務不能移除小隊與規則）、`viewFor`（訪客遮蔽，含 `guestReason` 隱藏自行輸入的事由）、`syncView`／`mergeView`（增量同步）、PIN 雜湊、帳號操作 |
 | 移轉 | `src/migrate-v2.js`（367 行） | v2 資料轉換、`loadAny()` |
-| 後台 | `src/Code.js`（722 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長，記下 PIN 指紋）、錯誤 5 次鎖定（鎖內先記次數）、`apiApplyBatch` 合併送出、`autoRebuildReports` 下課後自動更新報表（觸發條件，以 `DATA_VERSION`／`REPORT_PLAN` 省略不必要的讀取）、登入計數用文件鎖、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
-| 介面 | `src/ui/*.js` | `backend.js`（雲端 fetch／單機 localStorage、增量合併）、`app.js`（樂觀更新佇列與合併送出、關閉前提醒、外框、LOGO）、`lib.js`（`App.html` 自動跳脫樣板、提示訊息合併）、各分頁 `view-*.js` |
+| 後台 | `src/Code.js`（728 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長，記下 PIN 指紋）、錯誤 5 次鎖定（鎖內先記次數）、`apiApplyBatch` 合併送出、`autoRebuildReports` 下課後自動更新報表（觸發條件，以 `DATA_VERSION`／`REPORT_PLAN` 省略不必要的讀取）、登入計數用文件鎖、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
+| 介面 | `src/ui/*.js` | `backend.js`（雲端 fetch／單機 localStorage、增量合併）、`app.js`（樂觀更新佇列與合併送出、關閉前提醒、外框、LOGO）、`lib.js`（`App.html` 自動跳脫樣板、提示訊息合併、送出中的表單 `App.busyUntil`）、各分頁 `view-*.js` |
 | 設定 | `src/config.js` | 後台網址 `GAS_URL`（公開，不是秘密） |
 | 建置與發布 | `scripts/build.js`、`scripts/deploy-gas.js`（151 行）、`.github/workflows/pages.yml` | 產生單機版、Pages 網頁、後台；後台版本指紋寫進兩邊，網頁比對不同時提示更新後台；`deploy-gas.js` 以 Apps Script API 比對部署作業的版本指紋、上傳後台、建立版本、更新現有部署作業並確認（授權來自 Secret `CLASPRC_JSON` 的 refresh token） |
 | 模擬與量測 | `scripts/gas-mock.js`、`scripts/gas-sim.js`、`scripts/stress.js` | Node／瀏覽器模擬 Apps Script；壓力測試 |
@@ -78,7 +78,7 @@ npm run e2e
 
 ## 已驗證事項（請仍獨立判斷）
 
-- **自動測試（2026-11-01，階段 6-21）**
+- **自動測試（2026-11-02，階段 6-22）**
   - `npm test`：97 項全過（資料層、權限、增量同步、v2 移轉、後台在 Node 模擬環境的完整流程、寫入失敗、資料工作表遺失或損壞、備份清理、`doPost` 白名單、LOGO、建置設定、登入次數與 PIN 指紋、合併送出、每堂出席、下課後自動更新報表、`deploy-gas.js` 的請求流程）。
   - `npm run e2e`：34 項全過，分單機版與模擬雲端版兩組。內容包括：建班、名冊、點名、加減分、兌換、撤銷、重新開啟、名字含 HTML、訪客遮蔽、壇務權限、多裝置增量同步、寫入失敗退回、登入逾時、後台版本提示、存取權錯誤提示、服務人員點名、LOGO 上傳、職務選單、舊職務保留、連續操作合併送出、關閉前提醒、提示訊息合併、各班護持堂數、每堂出席率與名單、入班日期影響應到人數、登入與表單連按只送出一次。
   - GitHub Actions「發布網頁」每次推送都會跑 `npm test` 並發布。
@@ -141,9 +141,17 @@ npm run e2e
    - `.github/workflows/pages.yml` 的權限、使用的 actions 是否固定版本。
    - 公開 repo 中有沒有不該公開的內容（PIN、`.clasp.json`、試算表 ID、真實姓名、組織圖檔）。
 
-## 已知問題（前七次審查找到，請確認或補充）
+## 已知問題（前八次審查找到，請確認或補充）
 
 第一次審查只看了階段 6-5（職務下拉選單），找到 5 項，都已在階段 6-7、6-8 處理。第二次是全 repo 審查（基準 `0f8c508`），找到 16 項，以下依那次的編號列出。第三次是 Claude 的安全性複查，找到 A–C 三項；第四次 Gemini 的安全性審查確認了 A–C，另有幾項低風險發現。
+
+**第八次審查（Claude，基準 `db218fc`，針對階段 6-21、6-22）找到，尚未修正：**
+
+- Q（低，確定）在階段 6-21 之前就已移到回收區的學員，刪除時沒有結束入班紀錄；之後還原時 `student.restore` 只在「沒有進行中的入班紀錄」時才新增一段，所以這些舊資料的刪除期間仍算應到（6-19 之前建立、沒有 `enrollments` 的學員則一律視為一直在班上）。只影響升級前就在回收區的學員。
+- R（建議）`App.busyUntil` 只停用並改寫第一個送出按鈕。團體加扣分表單有「加分」「扣分」兩個送出按鈕，第二個看起來仍可按；實際上重複送出已被 `data-busy` 擋下，而且這個對話框送出後立即關閉，沒有實際影響。
+- S（建議）登入對話框先用上次讀到的帳號清單：帳號剛被停用或刪除時，到背景更新完成前（一兩秒）仍會出現在選單，選它登入會被後台拒絕（帳號清單本來就公開，沒有資訊外洩）。
+
+查核過、沒有發現問題：`apply` 共用流水帳紀錄後，前後端沒有任何程式就地修改或排序既有紀錄（`migrate-v2.js` 只排序自己新建的資料；報表用 `slice().reverse()`；增量同步用 `concat`；訪客畫面另建新物件）；表單送出前先跳確認視窗的流程都在各自的「刪除」按鈕，不在表單送出裡；`student.import` 的 `joinDate` 經過 `date()` 驗證，`enrollments` 不能由 op 直接寫入。
 
 **第六次（Claude，基準 `d2d7fac`）與第七次（Gemini，基準 `0ea233a`）審查找到，已在階段 6-21 修正（請確認修正是否正確）：**
 
@@ -234,7 +242,7 @@ npm run e2e
    - `readState_` 不加鎖讀取，遇到寫入中途或連續寫入時的行為。
    - `LockService` 的範圍：`apiUserOp`、`apiSetLogo` 與 `apiApply` 之間。
    - 備份清理 `pruneBackups_` 會不會刪錯（例如跨年度結算的備份）。
-5. **樂觀更新與合併送出**（`src/ui/app.js` 的 `OPTIMISTIC`、`queue`、`pump`、`replayPending`、`confirmed`；`apiApplyBatch`）
+5. **樂觀更新、合併送出與送出中的表單**（`App.busyUntil` 在送出事件中記下表單、`App.run` 結束前停用送出按鈕；`src/ui/app.js` 的 `OPTIMISTIC`、`queue`、`pump`、`replayPending`、`confirmed`；`apiApplyBatch`）
    - 合併送出時部分操作被拒絕：其他操作的結果、畫面資料、回應的對應順序是否正確；後台寫入失敗時是否全部退回。
    - 後台失敗時畫面能否正確退回。
    - 連續快速操作、與 30 秒輪詢同時發生時。
@@ -249,6 +257,7 @@ npm run e2e
 
 9. **出席統計與自動報表**（`AttendStore.computeSessionAttendance`、`computeStaffDutyByClass`、`Code.js` 的 `rebuildReportSheets`、`autoRebuildReports`、`reportDueAt_`）
    - 出席、缺席、應到人數在刪除與還原學員、換班（`student.update`、刪除班別時轉班）、修改入班日期（`patch.joinDate`）、撤銷報到、跨班支援的服務人員、改版前沒有 `enrollments`／`joinDate` 的資料時是否正確，出席率會不會超過 100%。
+   - `AttendStore.apply` 共用既有流水帳紀錄物件（只複製陣列）：有沒有任何程式路徑（前端、後台、移轉、報表）會就地修改或排序既有紀錄，導致前一份資料被改到。
    - `enrollments` 能否被壇務自己組的 op 竄改（例如 `student.update` 的 patch、`student.import`、匯入備份），訪客畫面會不會洩漏入班紀錄或開始服務日期。
    - 自動更新的時間判斷：跨日、沒有結束時間的課次、課後才修改的課次、觸發條件漏跑一次或重建失敗時，會不會漏更新或重複更新。
    - 網頁課次列表與報表工作表是否用同一套計算、結果一致。
@@ -257,6 +266,7 @@ npm run e2e
 
 | commit | 內容 |
 |---|---|
+| 階段 6-23 | 更新 REQUEST.md（第八次審查） |
 | 階段 6-22 | 登入與表單送出時按鈕停用到後台回應（連按只送出一次）；登入帳號清單先用上次的、背景更新 |
 | 階段 6-21 | 處理第六、七次審查：`apply` 共用既有流水帳紀錄、刪除與還原的入班紀錄、匯入名冊的入班日期、報表與 CSV 的入班日期、`DATA_VERSION` 一次寫入 |
 | 階段 6-20 | 更新 REQUEST.md（第六次審查） |
