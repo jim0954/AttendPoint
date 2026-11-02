@@ -321,6 +321,20 @@ test('每堂應到人數依當天名冊：入班日期、換班、刪除、開�
   assert.deepEqual(stu().enrollments.map((e) => [e.from, e.to]), [['2026-10-01', '2026-10-20'], ['2026-10-27', null]]);
   assert.deepEqual(['2026-10-17', '2026-10-24', '2026-10-27'].map((d) => Store.enrolledOn(stu(), B, d)), [true, false, true]);
   assert.equal(Store.joinDateOf(stu()), '2026-10-27');
+  // 升級前刪除的學員（刪除時沒有結束入班紀錄，或根本沒有入班紀錄）：還原時以刪除那天補上空檔
+  const old1 = run({ type: 'student.create', classId: B, name: '舊刪除甲', joinDate: '2026-10-01' }).id;
+  const old2 = run({ type: 'student.create', classId: B, name: '舊刪除乙' }).id;
+  state.students.forEach((x) => {
+    if (x.id === old1) x.deletedAt = '2026-10-05T10:00:00';
+    if (x.id === old2) { x.deletedAt = '2026-10-05T10:00:00'; delete x.enrollments; }
+  });
+  run({ type: 'student.restore', id: old1 });
+  run({ type: 'student.restore', id: old2 });
+  const ranges = (id) => state.students.find((x) => x.id === id).enrollments.map((e) => [e.from, e.to]);
+  assert.deepEqual(ranges(old1), [['2026-10-01', '2026-10-05'], ['2026-10-27', null]]);
+  assert.deepEqual(ranges(old2), [['', '2026-10-05'], ['2026-10-27', null]]);
+  assert.equal(Store.enrolledOn(state.students.find((x) => x.id === old2), B, '2026-10-17'), false);
+
   // 匯入名冊可指定新學員的入班日期（已在名冊上的不受影響）
   run({ type: 'student.import', defaultClassId: B, joinDate: '2026-09-15', rows: [{ name: '匯入生' }, { name: '請假生' }] });
   assert.equal(Store.joinDateOf(state.students.find((x) => x.name === '匯入生')), '2026-09-15');

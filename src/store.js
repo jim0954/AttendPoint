@@ -818,10 +818,10 @@
     const student = mustFindDeleted(state.students, p.id, '學員');
     const cls = findById(state.classes, student.classId);
     if (!cls || cls.deletedAt) fail('CLASS_DELETED', '這位學員原本的班別已刪除，請先還原班別');
+    // 刪除期間不算在班上：入班紀錄結束在刪除那天（升級前刪除的學員當時沒有結束紀錄，這裡補上），從今天重新開始
+    leaveClass(student, student.deletedAt.slice(0, 10));
+    student.enrollments.push({ classId: student.classId, from: today(ctx), to: null });
     student.deletedAt = null;
-    if (Array.isArray(student.enrollments) && !student.enrollments.some(function (e) { return !e.to; })) {
-      student.enrollments.push({ classId: student.classId, from: today(ctx), to: null });
-    }
     touch(student, ctx);
     return { id: student.id };
   };
