@@ -2,17 +2,47 @@
 
 ## 給審查者的指示
 
-- **只做審查，不修改任何檔案**：程式碼、文件、測試都不要改，也不要 commit、push，或執行會改動 Google 試算表、Apps Script 的動作。唯一要建立的是下面的結果檔。
+- **只做審查，不修改 repo 裡既有的檔案**：程式碼、文件、測試都不要改，也不要 commit、push，或執行會改動 Google 試算表、Apps Script 的動作。只能新增兩樣東西：結果檔 `FINDINGS.md`，以及放重現測試的 `findings/` 資料夾（兩者都已列在 `.gitignore`，不會被 commit）。
 - 依嚴重度列出發現：**嚴重 / 高 / 中 / 低 / 建議**。每一項寫出：
   - 檔案與行號（以 repo 內的路徑為準，例如 `src/Code.js:149`）
   - 問題是什麼、在什麼情況下會發生、發生後的結果
   - 建議的修正方向（不用寫出完整程式碼）。如果修正會動到後台檔案（`src/store.js`、`src/auth.js`、`src/migrate-v2.js`、`src/Code.js`），請註明「需更新後台」，因為後台要另外部署到 Apps Script。
-  - 標示 **「確定」** 或 **「推測」**：確定 = 有程式碼依據，或可以用測試、模擬環境重現；推測 = 需要真實 Google Apps Script 環境、Google 文件或更多資訊才能確認，請寫出需要確認什麼。
+  - 標示 **「確定」** 或 **「推測」**：確定 = **附上能在目前程式上失敗的重現測試**（見下方「測試要求」）；推測 = 寫不出重現測試，例如需要真實 Google Apps Script 環境、配額或 Google 文件才能確認，請寫出需要確認什麼。只看程式碼推論、沒有測試的，請標「推測」。
 - 結果寫到 repo 根目錄的新檔案：`FINDINGS.md`（不要 commit）。
+- **測試是這次的必做項目**，見下一節「測試要求（必做）」。
 - 下面的「已驗證事項」僅供參考，請仍然獨立判斷，不要因為列為已驗證就略過。
 - **安全性是這次的必審項目**：下面「安全性審查（必做）」的每一點都要有結論（有問題就列出；沒問題也請寫一句「已檢查，未發現問題」與檢查方式），不能只看程式正確性。
 - 回覆與結果檔請用**繁體中文**。
 - repo 是公開的，結果中不要寫入真實學員資料、PIN 或任何憑證；程式碼中的名字都是假資料。
+
+## 測試要求（必做）
+
+1. **先跑現有測試**：`npm test`，能裝 Playwright 的話再跑 `npm run e2e`（步驟見「如何執行」）。在 `FINDINGS.md` 開頭寫出結果：通過與失敗數、失敗的測試名稱與訊息。裝不起來 Playwright 就寫明原因。
+2. **每個標「確定」的發現（嚴重／高／中／低）都要附重現測試**：
+   - 放在 `findings/`，檔名用發現的編號，例如 `findings/H1.test.js`；`FINDINGS.md` 裡寫出執行指令（例如 `node --test findings/H1.test.js`）與失敗訊息摘要。
+   - 寫法比照 `tests/`：資料規則用 `require('../src/store.js')`、`../src/auth.js`；後台用 `scripts/gas-mock.js` 的 `createGas()` 在 Node 模擬 Apps Script（範例見 `tests/gas.test.js`）；畫面相關可用 `tests/e2e/helpers.js` 與 `dist/gas-sim.html`（範例見 `tests/e2e/`）。
+   - **測試必須在目前的程式上失敗**，失敗的原因就是要回報的問題；請說明修好之後測試應該怎樣通過。
+   - 「建議」類可以不附測試。
+3. **寫不出重現測試的發現一律標「推測」**，並寫出需要確認什麼（例如需要真實 Apps Script 的配額或並行行為）。
+4. **不要修改 `tests/` 裡的既有測試，也不要為了讓測試通過去改程式**。
+5. **另外列出「缺少的測試」**：你認為重要、但目前沒有測試涵蓋的情況（可以用文字描述，或附在 `findings/` 的測試程式；這類測試在目前程式上通過也沒關係，請註明）。也請指出既有測試中「其實沒驗證到它聲稱的事」的地方（例如等待條件太寬、比對用部分字串、斷言永遠成立）。
+
+重現測試範例（後台）：
+
+```js
+// findings/X1.test.js：node --test findings/X1.test.js
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { createGas } = require('../scripts/gas-mock.js');
+
+test('X1：說明要重現的問題', () => {
+  const { gas: g } = createGas({ OWNER_PIN: '246810' });
+  const owner = g.apiLogin('U-owner', '246810').token;
+  const cls = g.apiApply(owner, { type: 'class.create', name: '測試班', idPrefix: 'T' }).result;
+  // …重現步驟…
+  assert.equal(/* 實際結果 */ 1, /* 正確應該是 */ 2, '目前的程式在這裡出錯');
+});
+```
 
 ## 系統目的
 
@@ -27,7 +57,7 @@
 
 ## 審查範圍
 
-- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-24 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
+- **基準**：`main` 的最新 commit（`git log -1` 查看；撰寫時為階段 6-25 的最後一個 commit），**整個 repo 都要審查**，不是只看最近的修改。
 - **這次特別注意上次外部審查（`0ea233a`）之後的修改**（`git diff 0ea233a -- src scripts .github` 約 +190／−50 行）：階段 6-21 `AttendStore.apply` 改為只複製流水帳陣列、共用既有紀錄物件；刪除與還原學員記入入班紀錄；匯入名冊的入班日期；報表與 CSV 的入班日期、開始服務日期；`DATA_SHEET` 與 `DATA_VERSION` 一次寫入。階段 6-22 表單送出時按鈕停用到後台回應（`App.busyUntil`、`App.onSubmit`、`App.run`），登入對話框的帳號清單快取。
 - **排除**：根目錄 `AttendPoint.html`（舊版 v2，只當移轉測試資料）、`dist/`（建置產物，不在 repo 裡）。
 - 主要檔案（總共約 10,100 行，含測試與腳本）：
@@ -72,6 +102,12 @@ npx playwright install chromium
 
 ```bash
 npm run e2e
+```
+
+執行重現測試：
+
+```bash
+node --test "findings/*.test.js"
 ```
 
 `npm run gas-sim` 會產生 `dist/gas-sim.html`，在瀏覽器模擬整套雲端版（擁有者 PIN `246810`，資料只在記憶體）。
@@ -253,7 +289,7 @@ npm run e2e
    - 內嵌腳本的跳脫（`</script>`）。
    - `pages.yml` 的權限設定。
    - `src/config.js` 被改錯時的行為。
-8. **測試本身**（較低優先）：有沒有測試其實沒驗證到它聲稱的事（例如等待條件太寬、比對用部分字串）。
+8. **測試本身**：有沒有測試其實沒驗證到它聲稱的事（例如等待條件太寬、比對用部分字串），以及重要但沒有測試的情況（見「測試要求」第 5 點）。
 
 9. **出席統計與自動報表**（`AttendStore.computeSessionAttendance`、`computeStaffDutyByClass`、`Code.js` 的 `rebuildReportSheets`、`autoRebuildReports`、`reportDueAt_`）
    - 出席、缺席、應到人數在刪除與還原學員、換班（`student.update`、刪除班別時轉班）、修改入班日期（`patch.joinDate`）、撤銷報到、跨班支援的服務人員、改版前沒有 `enrollments`／`joinDate` 的資料時是否正確，出席率會不會超過 100%。
@@ -266,6 +302,7 @@ npm run e2e
 
 | commit | 內容 |
 |---|---|
+| 階段 6-25 | REQUEST.md 加入「測試要求（必做）」：先跑現有測試、「確定」的發現附重現測試（`findings/`） |
 | 階段 6-24 | 處理第八、九次審查 Q、R：還原學員以刪除日期補上入班紀錄空檔；送出中的表單停用所有送出按鈕 |
 | 階段 6-23 | 更新 REQUEST.md（第八次審查） |
 | 階段 6-22 | 登入與表單送出時按鈕停用到後台回應（連按只送出一次）；登入帳號清單先用上次的、背景更新 |

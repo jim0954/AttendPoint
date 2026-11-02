@@ -21,5 +21,9 @@ data/
 # 建置產物（npm run build 產生）
 dist/
 
-# 外部審查結果（見 REQUEST.md，不進 git）
+# 外部審查結果與重現測試（見 REQUEST.md，不進 git）
 FINDINGS.md
+findings/
+
+# 瀏覽器測試用的 Playwright（npm install --no-save playwright）
+node_modules/
