@@ -185,6 +185,7 @@
   // 表單送出時記下是哪個表單；送出時呼叫的 App.run／App.busyUntil 會把它的送出按鈕停用到後台回應，
   // 期間再按（或按 Enter）都不會再送出。
   let submitting = null;
+  let submitter = null;
   document.addEventListener('submit', function (e) {
     if (e.target.dataset.busy) {
       e.preventDefault();
@@ -192,26 +193,24 @@
       return;
     }
     submitting = e.target;
-    setTimeout(function () { submitting = null; }, 0);
+    submitter = e.submitter || null;
+    setTimeout(function () { submitting = null; submitter = null; }, 0);
   }, true);
 
-  /** 正在送出的表單在 settled（Promise）結束前停用送出按鈕；不是在表單送出時呼叫就不做事 */
+  /** 正在送出的表單在 settled（Promise）結束前停用所有送出按鈕（按下的那個顯示處理中）；不是在表單送出時呼叫就不做事 */
   App.busyUntil = function (settled, busyLabel) {
     const form = submitting;
     if (!form || form.dataset.busy) return settled;
-    const btn = form.querySelector('button[type=submit]');
+    const buttons = App.$$('button[type=submit]', form);
+    const btn = (submitter && form.contains(submitter) && submitter) || buttons[0];
     const label = btn && btn.textContent;
     form.dataset.busy = '1';
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = busyLabel || '⏳ 處理中…';
-    }
+    buttons.forEach(function (b) { b.disabled = true; });
+    if (btn) btn.textContent = busyLabel || '⏳ 處理中…';
     function done() {
       delete form.dataset.busy;
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = label;
-      }
+      buttons.forEach(function (b) { b.disabled = false; });
+      if (btn) btn.textContent = label;
     }
     Promise.resolve(settled).then(done, done);
     return settled;

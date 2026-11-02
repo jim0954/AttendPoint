@@ -229,6 +229,33 @@ test('單機版', { skip: SKIP }, async (t) => {
     await tab(page, 'checkin');
   });
 
+  await t.test('送出中的表單：所有送出按鈕停用，按下的那個顯示處理中，結束後恢復', async () => {
+    const state = await page.evaluate(async () => {
+      const form = document.createElement('form');
+      form.innerHTML = '<button type="submit" id="b1">加分</button><button type="submit" id="b2">扣分</button>';
+      document.body.appendChild(form);
+      let finish;
+      let calls = 0;
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        calls++;
+        App.busyUntil(new Promise((r) => { finish = r; }));
+      });
+      const b1 = form.querySelector('#b1');
+      const b2 = form.querySelector('#b2');
+      b2.click();
+      form.requestSubmit(b1); // 按 Enter 等其他方式送出也會被擋下
+      const during = [b1.disabled, b2.disabled, b1.textContent, b2.textContent, calls];
+      finish();
+      await new Promise((r) => setTimeout(r, 0));
+      const after = [b1.disabled, b2.disabled, b2.textContent];
+      form.remove();
+      return { during, after };
+    });
+    assert.deepEqual(state.during, [true, true, '加分', '⏳ 處理中…', 1]);
+    assert.deepEqual(state.after, [false, false, '扣分']);
+  });
+
   await t.test('提示：相同的合併成一則並顯示次數，最多同時 3 則', async () => {
     const texts = () => page.locator('#toastRoot .toast').allInnerTexts();
     await page.evaluate(() => {
