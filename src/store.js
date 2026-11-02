@@ -732,11 +732,22 @@
     student.classId = classId;
   }
 
-  /** 目前這個班的入班日期（改版前沒有紀錄的學員為空字串） */
+  /**
+   * 入班紀錄最後一段連續在目前班別的起點索引：刪除再還原會在同一班留下好幾段（中間是回收區期間），
+   * 這幾段算同一次入班；之前在別班的紀錄不算。
+   */
+  function currentRunStart(student) {
+    const list = student.enrollments;
+    let i = list.length;
+    while (i > 0 && list[i - 1].classId === student.classId) i--;
+    return i;
+  }
+
+  /** 目前這個班的入班日期（刪除再還原不算重新入班；改版前沒有紀錄的學員為空字串） */
   function joinDateOf(student) {
-    const list = Array.isArray(student.enrollments) ? student.enrollments : [];
-    const last = list[list.length - 1];
-    return last && last.classId === student.classId ? last.from : '';
+    if (!Array.isArray(student.enrollments)) return '';
+    const i = currentRunStart(student);
+    return i < student.enrollments.length ? student.enrollments[i].from : '';
   }
 
   /** 學員移到回收區：結束目前的入班紀錄（還原時再從當天開始，刪除期間的課不算應到） */
@@ -792,16 +803,24 @@
       student.teamId = teamIdOrNull(cls, wanted);
       moveClass(student, cls.id, today(ctx));
     }
-    // 修改目前這個班的入班日期（例如名冊晚了幾週才建立）
+    // 修改目前這個班的入班日期（例如名冊晚了幾週才建立）。刪除再還原留下的回收區期間維持不算在班上
     if ('joinDate' in patch) {
       const day = date(patch.joinDate, '入班日期');
       if (!Array.isArray(student.enrollments)) student.enrollments = [{ classId: student.classId, from: day, to: null }];
-      const current = student.enrollments[student.enrollments.length - 1];
-      if (current.to || current.classId !== student.classId) fail('INVALID_INPUT', '入班紀錄不完整，請洽擁有者');
-      const prev = student.enrollments[student.enrollments.length - 2];
+      const list = student.enrollments;
+      const i = currentRunStart(student);
+      if (i === list.length || list[list.length - 1].to) fail('INVALID_INPUT', '入班紀錄不完整，請洽擁有者');
+      const prev = list[i - 1]; // 上一個班別
       if (prev && day < prev.from) fail('INVALID_INPUT', '入班日期不可早於上一個班別的入班日期');
+      // 改晚：在新日期之前就結束的段落刪掉（最後一段沒有結束日，一定保留）
+      let removed = false;
+      while (list[i].to && list[i].to <= day) {
+        list.splice(i, 1);
+        removed = true;
+      }
+      // 改早、或新日期落在這段中間：這段從新日期開始；新日期落在回收區期間則維持從還原那天開始
+      if (!removed || list[i].from < day) list[i].from = day;
       if (prev) prev.to = day;
-      current.from = day;
     }
     touch(student, ctx);
     return { id: student.id };

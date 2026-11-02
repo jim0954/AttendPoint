@@ -320,6 +320,15 @@ test('每堂應到人數依當天名冊：入班日期、換班、刪除、開�
   const stu = () => state.students.find((x) => x.id === back);
   assert.deepEqual(stu().enrollments.map((e) => [e.from, e.to]), [['2026-10-01', '2026-10-20'], ['2026-10-27', null]]);
   assert.deepEqual(['2026-10-17', '2026-10-24', '2026-10-27'].map((d) => Store.enrolledOn(stu(), B, d)), [true, false, true]);
+  assert.equal(Store.joinDateOf(stu()), '2026-10-01', '刪除再還原不算重新入班');
+  // 修改入班日期：回收區期間（10/20–10/27）維持不算在班上
+  run({ type: 'student.update', id: back, patch: { joinDate: '2026-10-05' } });
+  assert.deepEqual(stu().enrollments.map((e) => [e.from, e.to]), [['2026-10-05', '2026-10-20'], ['2026-10-27', null]]);
+  run({ type: 'student.update', id: back, patch: { joinDate: '2026-10-01' } }); // 改回原本的日期也可以
+  assert.equal(Store.joinDateOf(stu()), '2026-10-01');
+  run({ type: 'student.update', id: back, patch: { joinDate: '2026-10-22' } }); // 落在回收區期間：從還原那天起
+  assert.deepEqual(stu().enrollments.map((e) => [e.from, e.to]), [['2026-10-27', null]]);
+  assert.deepEqual(['2026-10-21', '2026-10-24', '2026-10-27'].map((d) => Store.enrolledOn(stu(), B, d)), [false, false, true]);
   assert.equal(Store.joinDateOf(stu()), '2026-10-27');
   // 升級前刪除的學員（刪除時沒有結束入班紀錄，或根本沒有入班紀錄）：還原時以刪除那天補上空檔
   const old1 = run({ type: 'student.create', classId: B, name: '舊刪除甲', joinDate: '2026-10-01' }).id;
@@ -338,9 +347,17 @@ test('每堂應到人數依當天名冊：入班日期、換班、刪除、開�
   // 匯入名冊可指定新學員的入班日期（已在名冊上的不受影響）
   run({ type: 'student.import', defaultClassId: B, joinDate: '2026-09-15', rows: [{ name: '匯入生' }, { name: '請假生' }] });
   assert.equal(Store.joinDateOf(state.students.find((x) => x.name === '匯入生')), '2026-09-15');
-  assert.equal(Store.joinDateOf(stu()), '2026-10-27');
+  assert.equal(Store.joinDateOf(stu()), '2026-10-27', '已在名冊上的不受影響');
   assert.throws(() => run({ type: 'student.import', defaultClassId: B, joinDate: '9/15', rows: [{ name: '甲' }] }), (e) => e.code === 'INVALID_INPUT');
   assert.equal(Store.joinDateOf({ classId: A }), '', '改版前的學員沒有入班日期');
+
+  // 換班後又換回來：入班日期是最後一次回到這個班的那天
+  now = '2026-10-28T09:00:00';
+  const round = run({ type: 'student.create', classId: A, name: '來回生', joinDate: '2026-10-01' }).id;
+  run({ type: 'student.update', id: round, patch: { classId: B } });
+  now = '2026-10-29T09:00:00';
+  run({ type: 'student.update', id: round, patch: { classId: A } });
+  assert.equal(Store.joinDateOf(state.students.find((x) => x.id === round)), '2026-10-29');
 
   // 刪除班別時轉班也記下入班紀錄
   const c = run({ type: 'student.create', classId: A, name: '轉出生' }).id;
