@@ -285,12 +285,20 @@ test('下課後自動更新報表：結束時間（或最後活動時間）＋30
   assert.equal(check('2026-10-24T11:40:00'), 'idle', '資料變了：讀一次，還沒到期');
   assert.equal(reads, 1);
   assert.equal(sheets['課次'].cells().length, 1, '還沒更新：只有標題列');
+  assert.equal(sheets['課次'].cells()[0][0], '上課日期');
   assert.equal(check('2026-10-24T11:50:00'), 'skipped', '資料沒變、還沒到期：不讀試算表');
   assert.equal(reads, 0);
   assert.equal(check('2026-10-24T12:05:00'), 'rebuilt', '到期了');
   assert.equal(sheets['課次'].cells()[1][4], '1 / 1');
   assert.equal(check('2026-10-24T12:15:00'), 'skipped', '沒有下一個到期時間');
   assert.equal(reads, 0);
+  // 下課後才補登：補登時間＋30 分鐘再更新一次
+  at('2026-10-24T14:00:00');
+  ok(g.apiApply(staff, { type: 'points.award', studentId: stu.id, date: '2026-10-24', points: 3, reason: '補登' }));
+  assert.equal(check('2026-10-24T14:20:00'), 'idle');
+  assert.equal(check('2026-10-24T14:35:00'), 'rebuilt');
+  assert.ok(sheets['流水帳'].cells().some((r) => r[6] === '補登'), '報表有補登的紀錄');
+  assert.equal(check('2026-10-24T14:45:00'), 'skipped');
   // 沒有結束時間的課次：最後一次點名或服務人員點名＋30 分鐘
   const p = ok(g.apiApply(owner, { type: 'staff.create', name: '林輔導', role: '', classIds: [classId] })).result;
   at('2026-10-31T19:00:00');

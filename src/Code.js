@@ -595,7 +595,7 @@ function writeTable_(name, header, rows) {
 // ---------- 下課後自動更新報表 ----------
 // 在 Apps Script「觸發條件」設定 autoRebuildReports 每 10 分鐘執行（見 docs/deploy-gas.md 第 7 節）。
 // 每次只檢查：有課次「結束時間＋30 分鐘」在上次檢查之後到了，才重建報表；沒有就不動試算表。
-// 課次沒有填結束時間時，以這堂課最後一次點名、加分或服務人員點名的時間＋30 分鐘代替。
+// 課次沒有填結束時間、或下課後才補點名或加分時，以這堂課最後一次點名、加分或服務人員點名的時間＋30 分鐘為準。
 // 讀過資料後記下資料版本與「下一個到期時間」：資料沒變、也還沒到期時，下次檢查不必讀試算表。
 
 const REPORT_DELAY_MIN = 30;
@@ -609,10 +609,14 @@ function addMinutes_(local, minutes) {
   return d.toISOString().slice(0, 16);
 }
 
-/** 課次的報表更新時間：結束時間＋30 分鐘；沒有結束時間就用最後活動時間＋30 分鐘；都沒有則為 null */
+/**
+ * 課次的報表更新時間：結束時間與最後活動時間較晚的那個＋30 分鐘（下課後才補點名或加分，也會再更新一次）；
+ * 都沒有則為 null
+ */
 function reportDueAt_(session, lastActivity) {
-  if (session.end) return addMinutes_(session.date + 'T' + session.end, REPORT_DELAY_MIN);
-  return lastActivity ? addMinutes_(lastActivity, REPORT_DELAY_MIN) : null;
+  const end = session.end ? session.date + 'T' + session.end : '';
+  const base = [end, lastActivity || ''].sort().pop();
+  return base ? addMinutes_(base, REPORT_DELAY_MIN) : null;
 }
 
 /** 觸發條件呼叫：到了就重建報表，回傳 'rebuilt'、'idle'（讀過資料，沒有到期）或 'skipped'（沒讀資料） */
