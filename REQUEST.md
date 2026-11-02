@@ -34,7 +34,7 @@
 
 | 區塊 | 檔案 | 內容 |
 |---|---|---|
-| 資料層 | `src/store.js`（1191 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次；`computeSessionAttendance`（每堂出席、缺席、依當天名冊的應到人數）、入班紀錄 `enrollments`（`moveClass`、`enrolledOn`）、`computeStaffDutyByClass` |
+| 資料層 | `src/store.js`（1188 行） | 所有修改經 `apply(state, op)`（先整份複製，失敗時原資料不變）；積分由流水帳 `logs` 計算；軟刪除；`appendOnly` 判斷是否更換 `meta.syncId`；`sessionOf` 依日期自動建立課次；`computeSessionAttendance`（每堂出席、缺席、依當天名冊的應到人數）、入班紀錄 `enrollments`（`moveClass`、`enrolledOn`）、`computeStaffDutyByClass` |
 | 權限 | `src/auth.js`（342 行） | `authorize`（擁有者限定的操作、壇務只能撤銷自己今天的紀錄、壇務不能移除小隊與規則）、`viewFor`（訪客遮蔽，含 `guestReason` 隱藏自行輸入的事由）、`syncView`／`mergeView`（增量同步）、PIN 雜湊、帳號操作 |
 | 移轉 | `src/migrate-v2.js`（367 行） | v2 資料轉換、`loadAny()` |
 | 後台 | `src/Code.js`（728 行） | `doPost` 白名單、登入 token（CacheService，6 小時自動延長，記下 PIN 指紋）、錯誤 5 次鎖定（鎖內先記次數）、`apiApplyBatch` 合併送出、`autoRebuildReports` 下課後自動更新報表（觸發條件，以 `DATA_VERSION`／`REPORT_PLAN` 省略不必要的讀取）、登入計數用文件鎖、`LockService`、`writeData_` 輪流寫入與檢查、`readState_` 讀不到時拒絕、備份清理、LOGO、報表工作表、版本指紋 |
